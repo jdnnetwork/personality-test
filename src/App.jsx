@@ -86,7 +86,7 @@ export default function App(){
   async function analyzeCompanyInBackground(nameArg){
     const name=(nameArg??companyName).trim();
     if(!name)return;
-    try{const res=await fetch("/.netlify/functions/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"analyze_company",companyName:name})});if(res.ok){const data=await res.json();if(!data.error&&!data.parseError)setCompanyData(data);}}catch(e){}
+    try{const res=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"analyze_company",companyName:name})});if(res.ok){const data=await res.json();if(!data.error&&!data.parseError)setCompanyData(data);}}catch(e){}
   }
 
   // ═══ 기업명 검증 + 검사 시작 ═══
@@ -101,7 +101,7 @@ export default function App(){
     if(!input){ setCompanyValidation(null); setStage("pre_tip"); return; }
     setCompanyValidation({state:"validating"});
     try{
-      const res=await fetch("/.netlify/functions/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"validate_company",companyName:input})});
+      const res=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"validate_company",companyName:input})});
       if(!res.ok)throw new Error(`검증 서버 오류 (${res.status})`);
       const data=await res.json();
       if(data.error||data.parseError)throw new Error(data.error||"검증 결과 파싱 실패");
@@ -128,7 +128,7 @@ export default function App(){
 
   async function generateAiResults(basic){
     setStage("test_loading");setAiError("");
-    try{const res=await fetch("/.netlify/functions/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"generate_results",testResults:{companyName:companyData?.companyName||companyName||"일반",companyProfile:companyData?.bigFiveProfile||null,scores:basic.scores,adjustedScores:basic.adjustedScores,personalityType:basic.personalityType.name,consistencyScore:basic.consistencyPct,honestyScore:100-basic.sdPct,stabilityScore:basic.stabilityScore?.display,authenticityScore:basic.authenticityScore?.display,validityChecks:basic.validityChecks}})});
+    try{const res=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"generate_results",testResults:{companyName:companyData?.companyName||companyName||"일반",companyProfile:companyData?.bigFiveProfile||null,scores:basic.scores,adjustedScores:basic.adjustedScores,personalityType:basic.personalityType.name,consistencyScore:basic.consistencyPct,honestyScore:100-basic.sdPct,stabilityScore:basic.stabilityScore?.display,authenticityScore:basic.authenticityScore?.display,validityChecks:basic.validityChecks}})});
       if(!res.ok){setAiError(`서버 오류 (${res.status})`);setStage("result");return;}
       const data=await res.json();if(data.error||data.parseError){setAiError(data.error||"AI 결과 생성 실패");setStage("result");return;}
       setAiResults(data);setStage("result");
