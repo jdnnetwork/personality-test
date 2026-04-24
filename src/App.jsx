@@ -3,6 +3,8 @@ import { selectQuestions, DIM_LABELS, DIMS_ORDER } from "./questions.js";
 import { computeResults as computeResultsLib, adjustCompanyScore, getGrade } from "./scoring.js";
 
 const PER_PAGE=10;
+// URL에 ?dev=true 가 있을 때만 활성화되는 개발자 테스트 모드
+const DEV_MODE = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("dev") === "true";
 
 // ═══ Animated Radar ═══
 function AnimatedRadar({scores,dims,labels,companyProfile,size=360}){
@@ -134,6 +136,24 @@ export default function App(){
   }
 
   function handleTestComplete(){setEndTime(Date.now());const basic=computeResults();setBasicResults(basic);generateAiResults(basic);}
+
+  // ═══ DEV MODE: 자동 채우기 + 결과로 이동 ═══
+  function devAutoFill(fillFn){
+    if(!testSet) return;
+    const filled={};
+    testSet.questions.forEach(q=>{ filled[q.id]=fillFn(q); });
+    setAnswers(filled);
+    setEndTime(Date.now());
+    const basic=computeResultsLib({
+      questions:testSet.questions,
+      answers:filled,
+      ccPairs:testSet.ccPairs||[],
+      revPairs:testSet.revPairs||[],
+      ifIds:testSet.ifIds||[],
+    });
+    setBasicResults(basic);
+    generateAiResults(basic);
+  }
 
   const S={
     wrap:{minHeight:"100vh",background:"linear-gradient(160deg,#0c1222 0%,#162032 50%,#0c1222 100%)",color:"#f1f5f9",fontFamily:"'Noto Sans KR',-apple-system,sans-serif",padding:0},
@@ -586,6 +606,18 @@ export default function App(){
         </div>
         <div style={S.progBg}><div style={S.progFill(pct)}/></div>
       </div>
+      {DEV_MODE && <div style={{margin:"12px 0",padding:"12px 14px",background:"rgba(250,204,21,0.08)",border:"1px dashed rgba(250,204,21,0.45)",borderRadius:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+          <span style={{fontSize:11,fontWeight:900,letterSpacing:1.5,color:"#fde047",background:"rgba(250,204,21,0.15)",padding:"3px 8px",borderRadius:6}}>🛠 DEV MODE</span>
+          <span style={{fontSize:12,color:"#cbd5e0"}}>200문항 스킵 · 바로 결과로 이동</span>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2, 1fr)",gap:6}}>
+          <button style={{padding:"10px 12px",border:"1px solid rgba(250,204,21,0.4)",borderRadius:8,background:"rgba(15,23,42,0.5)",color:"#fde047",fontSize:12,fontWeight:700,cursor:"pointer"}} onClick={()=>devAutoFill(()=>4)}>전부 4로 자동 채우기</button>
+          <button style={{padding:"10px 12px",border:"1px solid rgba(250,204,21,0.4)",borderRadius:8,background:"rgba(15,23,42,0.5)",color:"#fde047",fontSize:12,fontWeight:700,cursor:"pointer"}} onClick={()=>devAutoFill(()=>Math.floor(Math.random()*5)+1)}>랜덤 자동 채우기</button>
+          <button style={{padding:"10px 12px",border:"1px solid rgba(250,204,21,0.4)",borderRadius:8,background:"rgba(15,23,42,0.5)",color:"#fde047",fontSize:12,fontWeight:700,cursor:"pointer"}} onClick={()=>devAutoFill(()=>5)}>극단 테스트 (전부 5)</button>
+          <button style={{padding:"10px 12px",border:"1px solid rgba(250,204,21,0.4)",borderRadius:8,background:"rgba(15,23,42,0.5)",color:"#fde047",fontSize:12,fontWeight:700,cursor:"pointer"}} onClick={()=>devAutoFill(()=>3)}>무성의 테스트 (전부 3)</button>
+        </div>
+      </div>}
       <div style={{textAlign:"center",fontSize:14,color:"#94a3b8",marginBottom:14,fontWeight:600}}>페이지 {page} / {TOTAL_PAGES}</div>
       {curQs.map((q,idx)=>{
         const gi=(page-1)*PER_PAGE+idx+1;
