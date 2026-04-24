@@ -216,7 +216,7 @@ export default function App(){
       <div style={S.card}>
         <div style={{fontSize:16,fontWeight:700,marginBottom:14,color:"#f1f5f9"}}>지원 기업 (선택)</div>
         <div style={{marginBottom:16}}>
-          <input style={{...S.input,borderColor:isError?"rgba(248,113,113,0.5)":S.input.borderColor}} placeholder="기업명 입력 (예: 삼성전자)" value={companyName} disabled={isValidating||isConfirm} onChange={e=>{setCompanyName(e.target.value);if(companyValidation)setCompanyValidation(null);}} onKeyDown={e=>{if(e.key==="Enter"&&!isValidating&&!isConfirm)validateCompanyAndStart();}}/>
+          <input style={{...S.input,borderColor:isError?"rgba(248,113,113,0.5)":S.input.borderColor}} placeholder="정확한 기업명을 쓰세요  현차 X → 현대자동차" value={companyName} disabled={isValidating||isConfirm} onChange={e=>{setCompanyName(e.target.value);if(companyValidation)setCompanyValidation(null);}} onKeyDown={e=>{if(e.key==="Enter"&&!isValidating&&!isConfirm)validateCompanyAndStart();}}/>
         </div>
         {isConfirm&&<div style={{marginBottom:14,padding:"14px 16px",background:"rgba(96,165,250,0.08)",border:"1px solid rgba(96,165,250,0.3)",borderRadius:12}}>
           <div style={{fontSize:14,color:"#cbd5e0",lineHeight:1.7,marginBottom:12}}>
