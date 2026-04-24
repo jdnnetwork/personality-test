@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { selectQuestions, DIM_LABELS, DIMS_ORDER, PERSONALITY_TYPES, IF_THRESHOLD, IF_FLAG_MIN } from "./questions.js";
+import { selectQuestions, DIM_LABELS, DIMS_ORDER } from "./questions.js";
+import { computeResults as computeResultsLib, adjustCompanyScore, getGrade } from "./scoring.js";
 
 const PER_PAGE=10;
 
@@ -29,108 +30,6 @@ function AnimatedRadar({scores,dims,labels,companyProfile,size=360}){
 function Spinner({text}){return(<div style={{textAlign:"center",padding:40}}><div style={{width:44,height:44,border:"3px solid rgba(96,165,250,0.2)",borderTop:"3px solid #60a5fa",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 16px"}}/><div style={{color:"#e2e8f0",fontSize:16,fontWeight:600}}>{text}</div><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style></div>);}
 
 function DeepHeader({subtitle}){return(<div style={{textAlign:"center",marginBottom:24}}><img src="/deepdungi.png" alt="딥둥이" style={{width:100,height:100,borderRadius:"50%",objectFit:"cover",marginBottom:12,border:"3px solid rgba(96,165,250,0.3)"}}/><div style={{fontSize:12,letterSpacing:6,color:"#94a3b8",textTransform:"uppercase",marginBottom:4,fontWeight:700}}>457deep</div><h1 style={{fontSize:26,fontWeight:900,background:"linear-gradient(135deg,#60a5fa,#a78bfa)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",lineHeight:1.3,marginBottom:8}}>딥둥이 모의 인성검사</h1>{subtitle&&<p style={{color:"#cbd5e0",fontSize:14,lineHeight:1.6,whiteSpace:"pre-line"}}>{subtitle}</p>}</div>);}
-
-// ═══ 이상치/무성의 탐지 함수 ═══
-function detectAllSame(answers, questions) {
-  // 셔플된 원래 순서대로 답변 배열 생성
-  const orderedAnswers = questions.map(q => answers[q.id]).filter(a => a !== undefined);
-  let maxRun = 1, curRun = 1;
-  for (let i = 1; i < orderedAnswers.length; i++) {
-    if (orderedAnswers[i] === orderedAnswers[i - 1]) { curRun++; if (curRun > maxRun) maxRun = curRun; }
-    else curRun = 1;
-  }
-  return { detected: maxRun >= 20, maxRun };
-}
-
-function detectInfrequency(answers, ifIds) {
-  let flagged = 0;
-  const flaggedItems = [];
-  (ifIds || []).forEach(id => {
-    const a = answers[id];
-    if (a !== undefined && a >= IF_THRESHOLD) { flagged++; flaggedItems.push(id); }
-  });
-  // IF_FLAG_MIN개 이상 동의 시에만 감점 대상 (단, 결과에서는 직접 언급하지 않음)
-  return { detected: flagged >= IF_FLAG_MIN, count: flagged, flaggedItems };
-}
-
-function detectLowVariance(answers, questions) {
-  // 성격 차원 측정 문항만 (CC/SD/IF 제외) 대상으로 표준편차 계산
-  const vals = questions
-    .filter(q => q.dim !== "CC" && q.dim !== "SD" && q.dim !== "IF")
-    .map(q => answers[q.id])
-    .filter(a => a !== undefined);
-  if (vals.length < 10) return { detected: false };
-  const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
-  const variance = vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length;
-  const std = Math.sqrt(variance);
-  return { detected: std < 0.5 };
-}
-
-function detectExtremeHigh(adjustedScores, dims) {
-  // 보정 후 85점 이상인 차원 개수
-  const highCount = dims.filter(d => (adjustedScores[d] || 0) >= 85).length;
-  return { detected: highCount >= 7, count: highCount, total: dims.length };
-}
-
-function detectStatisticalOutlier(scores) {
-  const mainDims = DIMS_ORDER;
-  const vals = mainDims.map(d => scores[d] || 0);
-  const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
-  const allAbove85 = vals.every(v => v >= 85);
-  const avgAbove80 = avg >= 80;
-  const extremeLows = mainDims.filter(d => (scores[d] || 0) <= 20);
-  return {
-    allHigh: allAbove85,
-    avgHigh: avgAbove80,
-    avg: Math.round(avg),
-    extremeLows,
-    detected: allAbove85 || avgAbove80 || extremeLows.length > 0
-  };
-}
-
-// ═══ 점수 보정 ═══
-function adjustScore(raw) {
-  // 표시점수 = 원점수 × 0.6 + 30, 하한 25 · 상한 95
-  return Math.min(95, Math.max(25, Math.round(raw * 0.6 + 30)));
-}
-function adjustCompanyScore(raw) {
-  // 기업 적합도 = AI 결과 + 10, 상한 95
-  if (typeof raw !== "number") return raw;
-  return Math.min(95, Math.max(0, Math.round(raw + 10)));
-}
-
-function buildScore(raw, penalty) {
-  const adjRaw = Math.max(0, Math.round(raw - penalty));
-  const display = Math.max(35, adjRaw); // 하한 35
-  const level = adjRaw >= 80 ? "매우 높음" : adjRaw >= 65 ? "양호" : adjRaw >= 50 ? "보통" : adjRaw >= 40 ? "주의" : "경고";
-  return { raw: adjRaw, display, penalty, level };
-}
-
-// 응답 안정성 — 일관성 기반 + 올-세임/로우-배리언스 감점
-function computeStabilityScore(conP, vc) {
-  let penalty = 0;
-  if (vc.allSame?.detected) penalty += 20;
-  if (vc.lowVariance?.detected) penalty += 15;
-  return buildScore(conP, penalty);
-}
-
-// 응답 진정성 — 솔직성 기반 + 비빈도/극단값 감점
-function computeAuthenticityScore(sdP, vc) {
-  const honesty = 100 - sdP;
-  let penalty = 0;
-  if (vc.infrequency?.detected) penalty += 15;
-  if (vc.extremeHigh?.detected) penalty += 10;
-  return buildScore(honesty, penalty);
-}
-
-// 차원 점수 → 등급 변환
-function getGrade(score) {
-  if (score > 65) return { grade: "S", color: "#10b981", bg: "rgba(16,185,129,0.18)" };
-  if (score > 55) return { grade: "A", color: "#3b82f6", bg: "rgba(59,130,246,0.18)" };
-  if (score > 40) return { grade: "B", color: "#f97316", bg: "rgba(249,115,22,0.18)" };
-  if (score > 30) return { grade: "C", color: "#ef4444", bg: "rgba(239,68,68,0.18)" };
-  return { grade: "D", color: "#991b1b", bg: "rgba(153,27,27,0.25)" };
-}
 
 export default function App(){
   const[stage,setStage]=useState("intro");
@@ -172,50 +71,13 @@ export default function App(){
   const pct=Math.round(total/TOTAL_Q*100);
 
   function computeResults(){
-    const ccPairs = testSet?.ccPairs || [];
-    const revPairs = testSet?.revPairs || [];
-    const ifIds = testSet?.ifIds || [];
-    const ds={};DIMS_ORDER.forEach(d=>{ds[d]=[];});
-    questions.forEach(q=>{
-      if(q.dim==="CC"||q.dim==="SD"||q.dim==="IF")return;
-      const a=answers[q.id];if(a===undefined)return;
-      if(!ds[q.dim])ds[q.dim]=[];
-      ds[q.dim].push(q.rev?(6-a):a);
+    return computeResultsLib({
+      questions,
+      answers,
+      ccPairs: testSet?.ccPairs || [],
+      revPairs: testSet?.revPairs || [],
+      ifIds: testSet?.ifIds || [],
     });
-    const sc={};
-    Object.keys(ds).forEach(d=>{const arr=ds[d];sc[d]=arr.length?Math.round((arr.reduce((a,b)=>a+b,0)/arr.length-1)/4*100):50;});
-
-    const sdQ=questions.filter(q=>q.dim==="SD");
-    const sdS=sdQ.reduce((s,q)=>s+(answers[q.id]||3),0);
-    const sdP=sdQ.length?Math.round(sdS/(sdQ.length*5)*100):50;
-
-    let ccDiffs=[];
-    ccPairs.forEach(([c,o])=>{const a1=answers[c],a2=answers[o];if(a1!==undefined&&a2!==undefined)ccDiffs.push(Math.abs(a1-a2));});
-    let dimDiffs=[];
-    revPairs.forEach(([p,r])=>{const a1=answers[p],a2=answers[r];if(a1!==undefined&&a2!==undefined){const q=questions.find(q=>q.id===r);if(q&&q.rev)dimDiffs.push(Math.abs(a1-(6-a2)));else dimDiffs.push(Math.abs(a1-a2));}});
-    let conP=50;const allD=[...ccDiffs,...dimDiffs];
-    if(allD.length>0){conP=Math.max(0,Math.round((1-allD.reduce((a,b)=>a+b,0)/allD.length/4)*100));}
-
-    // ═══ 보정 점수 (9차원 전체) ═══
-    const posDims = [...DIMS_ORDER];
-    const adjScores = {...sc};
-    posDims.forEach(d => { adjScores[d] = adjustScore(sc[d] || 0); });
-
-    // ═══ 이상치 탐지 ═══
-    const allSame = detectAllSame(answers, questions);
-    const ifResult = detectInfrequency(answers, ifIds);
-    const outlier = detectStatisticalOutlier(sc);
-    const lowVariance = detectLowVariance(answers, questions);
-    const extremeHigh = detectExtremeHigh(adjScores, posDims);
-
-    const vc = { allSame, infrequency: ifResult, outlier, lowVariance, extremeHigh };
-    const stability = computeStabilityScore(conP, vc);
-    const authenticity = computeAuthenticityScore(sdP, vc);
-
-    const pType=PERSONALITY_TYPES.find(t=>t.condition(sc))||PERSONALITY_TYPES[7];
-    return{scores:sc, adjustedScores:adjScores, sdPct:sdP, consistencyPct:conP, stabilityScore:stability, authenticityScore:authenticity, personalityType:pType,
-      validityChecks: vc
-    };
   }
 
   async function analyzeCompanyInBackground(){
