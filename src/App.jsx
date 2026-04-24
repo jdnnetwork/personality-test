@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { BASE_QUESTIONS, PUBLIC_QUESTIONS, CC_PAIRS, DIM_LABELS, DIMS_ORDER, PUBLIC_DIMS, NEGATIVE_DIMS, NEG_LABELS, PERSONALITY_TYPES, IF_IDS, IF_THRESHOLD, IF_FLAG_MIN } from "./questions.js";
+import { selectQuestions, DIM_LABELS, DIMS_ORDER, PUBLIC_DIMS, NEGATIVE_DIMS, NEG_LABELS, PERSONALITY_TYPES, IF_THRESHOLD, IF_FLAG_MIN } from "./questions.js";
 
 function shuffleWithSeed(arr,seed=42){const a=[...arr];let s=seed;for(let i=a.length-1;i>0;i--){s=(s*16807)%2147483647;const j=s%(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
 const PER_PAGE=10;
@@ -43,10 +43,10 @@ function detectAllSame(answers, questions) {
   return { detected: maxRun >= 20, maxRun };
 }
 
-function detectInfrequency(answers) {
+function detectInfrequency(answers, ifIds) {
   let flagged = 0;
   const flaggedItems = [];
-  IF_IDS.forEach(id => {
+  (ifIds || []).forEach(id => {
     const a = answers[id];
     if (a !== undefined && a >= IF_THRESHOLD) { flagged++; flaggedItems.push(id); }
   });
@@ -126,15 +126,22 @@ export default function App(){
   const[aiResults,setAiResults]=useState(null);
   const[aiError,setAiError]=useState("");
   const[basicResults,setBasicResults]=useState(null);
+  const[testSet,setTestSet]=useState(null); // {questions, ccPairs, ifIds, revPairs, seed}
 
-  const questions=useMemo(()=>{
-    const base=[...BASE_QUESTIONS];
-    if(mode==="public") return shuffleWithSeed([...base,...PUBLIC_QUESTIONS],777);
-    return shuffleWithSeed(base,777);
-  },[mode]);
-
+  const questions = testSet?.questions || [];
   const TOTAL_Q=questions.length;
-  const TOTAL_PAGES=Math.ceil(TOTAL_Q/PER_PAGE);
+  const TOTAL_PAGES=Math.max(1, Math.ceil(TOTAL_Q/PER_PAGE));
+
+  // 매 검사 세션 시작마다 새 시드로 문항 선정
+  function startNewSession() {
+    const seed = Math.floor(Math.random() * 2147483647);
+    const set = selectQuestions(seed, mode);
+    setTestSet({ ...set, seed });
+    setPage(1);
+    setAnswers({});
+    setStartTime(Date.now());
+    setStage("test");
+  }
 
   useEffect(()=>{window.scrollTo({top:0,behavior:"smooth"});},[page,stage]);
 
@@ -148,6 +155,9 @@ export default function App(){
   const pct=Math.round(total/TOTAL_Q*100);
 
   function computeResults(){
+    const ccPairs = testSet?.ccPairs || [];
+    const revPairs = testSet?.revPairs || [];
+    const ifIds = testSet?.ifIds || [];
     const allDims=[...DIMS_ORDER,...(mode==="public"?[...PUBLIC_DIMS,...NEGATIVE_DIMS]:[])];
     const ds={};allDims.forEach(d=>{ds[d]=[];});
     questions.forEach(q=>{
@@ -162,11 +172,10 @@ export default function App(){
 
     const sdQ=questions.filter(q=>q.dim==="SD");
     const sdS=sdQ.reduce((s,q)=>s+(answers[q.id]||3),0);
-    const sdP=Math.round(sdS/(sdQ.length*5)*100);
+    const sdP=sdQ.length?Math.round(sdS/(sdQ.length*5)*100):50;
 
     let ccDiffs=[];
-    CC_PAIRS.forEach(([c,o])=>{const a1=answers[c],a2=answers[o];if(a1!==undefined&&a2!==undefined)ccDiffs.push(Math.abs(a1-a2));});
-    const revPairs=[[1,6],[23,28],[45,48],[67,77],[89,90],[23,33],[47,58],[141,144],[159,163],[129,134]];
+    ccPairs.forEach(([c,o])=>{const a1=answers[c],a2=answers[o];if(a1!==undefined&&a2!==undefined)ccDiffs.push(Math.abs(a1-a2));});
     let dimDiffs=[];
     revPairs.forEach(([p,r])=>{const a1=answers[p],a2=answers[r];if(a1!==undefined&&a2!==undefined){const q=questions.find(q=>q.id===r);if(q&&q.rev)dimDiffs.push(Math.abs(a1-(6-a2)));else dimDiffs.push(Math.abs(a1-a2));}});
     let conP=50;const allD=[...ccDiffs,...dimDiffs];
@@ -179,7 +188,7 @@ export default function App(){
 
     // ═══ 이상치 탐지 ═══
     const allSame = detectAllSame(answers, questions);
-    const ifResult = detectInfrequency(answers);
+    const ifResult = detectInfrequency(answers, ifIds);
     const outlier = detectStatisticalOutlier(sc);
     const lowVariance = detectLowVariance(answers, questions);
     const extremeHigh = detectExtremeHigh(adjScores, posDims);
@@ -250,13 +259,13 @@ export default function App(){
           <div style={S.modeBtn(mode==="private")} onClick={()=>setMode("private")}>
             <div style={{fontSize:28,marginBottom:8}}>🏢</div>
             <div style={{fontSize:16,fontWeight:700,color:mode==="private"?"#60a5fa":"#cbd5e0"}}>사기업</div>
-            <div style={{fontSize:13,color:"#94a3b8",marginTop:4}}>204문항 · 약 25분</div>
+            <div style={{fontSize:13,color:"#94a3b8",marginTop:4}}>218문항 · 약 25분</div>
             <div style={{fontSize:11,color:"#64748b",marginTop:6}}>삼성, SK, 현대, LG, CJ 등</div>
           </div>
           <div style={S.modeBtn(mode==="public")} onClick={()=>setMode("public")}>
             <div style={{fontSize:28,marginBottom:8}}>🏛️</div>
             <div style={{fontSize:16,fontWeight:700,color:mode==="public"?"#60a5fa":"#cbd5e0"}}>공공기관</div>
-            <div style={{fontSize:13,color:"#94a3b8",marginTop:4}}>244문항 · 약 30분</div>
+            <div style={{fontSize:13,color:"#94a3b8",marginTop:4}}>258문항 · 약 30분</div>
             <div style={{fontSize:11,color:"#64748b",marginTop:6}}>공기업, 준정부, 공공기관</div>
           </div>
         </div>
@@ -271,11 +280,11 @@ export default function App(){
           {mode==="public"&&<><span style={{...S.tag,background:"rgba(139,92,246,0.15)",color:"#c4b5fd"}}>윤리성</span><span style={{...S.tag,background:"rgba(248,113,113,0.1)",color:"#fca5a5"}}>부적격 요인 탐지</span></>}
         </div>
         <div style={{fontSize:13,color:"#a78bfa",padding:"10px 14px",background:"rgba(139,92,246,0.08)",borderRadius:10,border:"1px solid rgba(139,92,246,0.15)",lineHeight:1.7,marginBottom:12}}>
-          🔍 <span style={{fontWeight:700}}>탐지 시스템</span>: 응답 신뢰도 통합 지표 · 사회적 바람직성(SD) 5문항 · 일관성 검증(CC) 9쌍 · 차원 내 정역 쌍 10개 · <span style={{color:"#f87171",fontWeight:700}}>비빈도(IF) 4문항</span> · <span style={{color:"#f87171",fontWeight:700}}>올-세임/로우-배리언스 탐지</span> · <span style={{color:"#f87171",fontWeight:700}}>극단값 패턴 탐지</span>
+          🔍 <span style={{fontWeight:700}}>탐지 시스템</span>: 응답 신뢰도 통합 지표 · 매 검사 랜덤 출제(풀 720+) · 사회적 바람직성(SD) · 일관성 검증(CC) · 차원 내 정역 쌍 · <span style={{color:"#f87171",fontWeight:700}}>비빈도(IF)</span> · <span style={{color:"#f87171",fontWeight:700}}>올-세임/로우-배리언스 탐지</span> · <span style={{color:"#f87171",fontWeight:700}}>극단값 패턴 탐지</span>
         </div>
         <div style={{fontSize:15,lineHeight:2.2,color:"#cbd5e0"}}>
           <span style={{color:"#60a5fa",fontWeight:700}}>STEP 1</span> 지원 기업/기관명 입력 (선택)<br/>
-          <span style={{color:"#a78bfa",fontWeight:700}}>STEP 2</span> {mode==="public"?"244":"204"}문항 인성검사<br/>
+          <span style={{color:"#a78bfa",fontWeight:700}}>STEP 2</span> {mode==="public"?"258":"218"}문항 인성검사<br/>
           <span style={{color:"#c084fc",fontWeight:700}}>STEP 3</span> AI 맞춤 결과 + TIP 제공
         </div>
       </div>
@@ -291,13 +300,13 @@ export default function App(){
   if(stage==="company_input") return(
     <div style={S.wrap}><div style={S.box}>
       <div style={{height:32}}/>
-      <DeepHeader subtitle={`${mode==="public"?"공공기관":"사기업"} 모드 · ${mode==="public"?"244":"204"}문항`}/>
+      <DeepHeader subtitle={`${mode==="public"?"공공기관":"사기업"} 모드 · ${mode==="public"?"258":"218"}문항`}/>
       <div style={S.card}>
         <div style={{fontSize:16,fontWeight:700,marginBottom:14,color:"#f1f5f9"}}>지원 {mode==="public"?"기관":"기업"} (선택)</div>
         <div style={{marginBottom:16}}>
-          <input style={S.input} placeholder={mode==="public"?"기관명 입력 (예: 한국전력공사)":"기업명 입력 (예: 삼성전자)"} value={companyName} onChange={e=>setCompanyName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){if(companyName.trim())analyzeCompanyInBackground();setStage("test");setStartTime(Date.now());}}}/>
+          <input style={S.input} placeholder={mode==="public"?"기관명 입력 (예: 한국전력공사)":"기업명 입력 (예: 삼성전자)"} value={companyName} onChange={e=>setCompanyName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){if(companyName.trim())analyzeCompanyInBackground();startNewSession();}}}/>
         </div>
-        <button style={{...S.btn(true),width:"100%"}} onClick={()=>{if(companyName.trim())analyzeCompanyInBackground();setStage("test");setStartTime(Date.now());}}>검사 시작하기</button>
+        <button style={{...S.btn(true),width:"100%"}} onClick={()=>{if(companyName.trim())analyzeCompanyInBackground();startNewSession();}}>검사 시작하기</button>
         <div style={{textAlign:"center",marginTop:12,fontSize:13,color:"#94a3b8"}}>입력하지 않아도 검사는 진행됩니다</div>
       </div>
     </div></div>
@@ -604,7 +613,7 @@ export default function App(){
           <img src="/deepdungi.png" alt="딥둥이" style={{width:52,height:52,borderRadius:"50%",objectFit:"cover",marginBottom:10}}/>
           <div style={{fontSize:13,color:"#64748b",lineHeight:1.8}}>본 검사는 모의 인성검사입니다.<br/><span style={{color:"#94a3b8",fontWeight:600}}>Powered by 457deep · 딥둥이</span></div>
         </div>
-        <button style={{...S.btn(true),width:"100%",padding:"16px",fontSize:16,marginBottom:32}} onClick={()=>{setStage("intro");setMode(null);setPage(1);setAnswers({});setCompanyData(null);setCompanyName("");setAiResults(null);setBasicResults(null);setStartTime(null);setEndTime(null);}}>처음부터 다시하기</button>
+        <button style={{...S.btn(true),width:"100%",padding:"16px",fontSize:16,marginBottom:32}} onClick={()=>{setStage("intro");setMode(null);setPage(1);setAnswers({});setCompanyData(null);setCompanyName("");setAiResults(null);setBasicResults(null);setStartTime(null);setEndTime(null);setTestSet(null);}}>처음부터 다시하기</button>
       </div></div>
     );
   }
