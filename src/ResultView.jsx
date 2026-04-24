@@ -74,7 +74,7 @@ function FinScoreBar({ label, score, benchmark, accent = ACCENT, max = 100 }) {
 }
 
 // ─── 메인 ResultView ───
-export default function ResultView({ basicResults, aiResults, aiError, companyData, companyName, mins, total, totalQ, onRetry, onAiRetry }) {
+export default function ResultView({ basicResults, aiResults, aiError, companyData, companyName, mins, total, totalQ, onRetry, onAiRetry, skipCompanyAI = false }) {
   const { scores: sc, adjustedScores: adj, sdPct: sdP, consistencyPct: conP, stabilityScore: stab, authenticityScore: auth, personalityType: pType, validityChecks: vc } = basicResults;
 
   const stabOneLine = stab.raw >= 65 ? "비슷한 문항에 일관되게 응답" : stab.raw >= 50 ? "대체로 일관적이지만 일부 모순" : "응답 패턴 변동이 커 재점검 권장";
@@ -454,7 +454,7 @@ export default function ResultView({ basicResults, aiResults, aiError, companyDa
       )}
 
       {/* §07 Target Company */}
-      {companyData && (
+      {!skipCompanyAI && companyData && (
         <div className="fin-card fin-card-accent">
           <div className="fin-section-head hero">
             <div className="fin-section-title-emph">
@@ -477,7 +477,7 @@ export default function ResultView({ basicResults, aiResults, aiError, companyDa
       )}
 
       {/* §08 Fit Score */}
-      {aiResults && fitScore !== null && (
+      {!skipCompanyAI && aiResults && fitScore !== null && (
         <div className="fin-card">
           <div className="fin-section-head">
             <div className="fin-section-title">Fit Score{companyData?.companyName ? ` · ${companyData.companyName}` : ""}</div>

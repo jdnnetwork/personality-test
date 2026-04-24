@@ -48,6 +48,7 @@ export default function App(){
   const[basicResults,setBasicResults]=useState(null);
   const[testSet,setTestSet]=useState(null); // {questions, ccPairs, ifIds, revPairs, seed}
   const[companyValidation,setCompanyValidation]=useState(null); // null | {state:"validating"} | {state:"confirm", correctedName, message} | {state:"error", message}
+  const[skipCompanyAI,setSkipCompanyAI]=useState(false); // 사용자가 미검증 기업명으로 그대로 진행한 경우 AI 기업 분석 생략
 
   const questions = testSet?.questions || [];
   const TOTAL_Q=questions.length;
@@ -94,7 +95,16 @@ export default function App(){
   // ═══ 기업명 검증 + 검사 시작 ═══
   function proceedToTest(finalName){
     setCompanyValidation(null);
+    setSkipCompanyAI(false);
     if(finalName){ setCompanyName(finalName); analyzeCompanyInBackground(finalName); }
+    setStage("pre_tip");
+  }
+
+  // 미검증 기업명으로 그대로 진행 — AI 기업 분석/적합도는 생략
+  function proceedAsIs(){
+    setCompanyValidation(null);
+    setSkipCompanyAI(true);
+    // companyName은 사용자가 입력한 그대로 유지. analyze_company 호출 생략(companyData=null).
     setStage("pre_tip");
   }
 
@@ -130,7 +140,10 @@ export default function App(){
 
   async function generateAiResults(basic){
     setStage("test_loading");setAiError("");
-    try{const res=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"generate_results",testResults:{companyName:companyData?.companyName||companyName||"일반",companyProfile:companyData?.bigFiveProfile||null,scores:basic.scores,adjustedScores:basic.adjustedScores,personalityType:basic.personalityType.name,consistencyScore:basic.consistencyPct,honestyScore:100-basic.sdPct,stabilityScore:basic.stabilityScore?.display,authenticityScore:basic.authenticityScore?.display,validityChecks:basic.validityChecks}})});
+    // skipCompanyAI=true인 경우 AI에 기업 맥락 전달 안 함 → 일반 분석 + 면접 질문만 생성
+    const aiCompanyName = skipCompanyAI ? "일반" : (companyData?.companyName || companyName || "일반");
+    const aiCompanyProfile = skipCompanyAI ? null : (companyData?.bigFiveProfile || null);
+    try{const res=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"generate_results",testResults:{companyName:aiCompanyName,companyProfile:aiCompanyProfile,scores:basic.scores,adjustedScores:basic.adjustedScores,personalityType:basic.personalityType.name,consistencyScore:basic.consistencyPct,honestyScore:100-basic.sdPct,stabilityScore:basic.stabilityScore?.display,authenticityScore:basic.authenticityScore?.display,validityChecks:basic.validityChecks}})});
       if(!res.ok){setAiError(`서버 오류 (${res.status})`);setStage("result");return;}
       const data=await res.json();if(data.error||data.parseError){setAiError(data.error||"AI 결과 생성 실패");setStage("result");return;}
       setAiResults(data);setStage("result");
@@ -215,8 +228,10 @@ export default function App(){
             <button style={{padding:"12px 20px",border:"1px solid rgba(71,85,105,0.5)",borderRadius:12,background:"rgba(15,23,42,0.5)",color:"#cbd5e0",fontSize:15,fontWeight:700,cursor:"pointer"}} onClick={rejectCorrection}>다시 입력</button>
           </div>
         </div>}
-        {isError&&<div style={{marginBottom:14,padding:"12px 16px",background:"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:10}}>
-          <div style={{fontSize:13,color:"#fca5a5",lineHeight:1.7}}>⚠️ {companyValidation.message}</div>
+        {isError&&<div style={{marginBottom:14,padding:"14px 16px",background:"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:10}}>
+          <div style={{fontSize:13,color:"#fca5a5",lineHeight:1.7,marginBottom:12}}>⚠️ {companyValidation.message}</div>
+          <button style={{width:"100%",padding:"10px 14px",fontSize:13,fontWeight:600,border:"1px solid rgba(248,113,113,0.5)",borderRadius:8,background:"rgba(15,23,42,0.4)",color:"#fca5a5",cursor:"pointer"}} onClick={proceedAsIs}>그래도 이 이름으로 검사 진행하기 →</button>
+          <div style={{fontSize:11,color:"#fca5a5",opacity:0.7,lineHeight:1.6,marginTop:8,textAlign:"center"}}>기업 맞춤 분석 없이 기본 결과만 표시됩니다</div>
         </div>}
         <button style={{...S.btn(true),width:"100%",opacity:isValidating||isConfirm?0.55:1,cursor:isValidating||isConfirm?"not-allowed":"pointer"}} disabled={isValidating||isConfirm} onClick={validateCompanyAndStart}>
           {isValidating?"기업명 확인 중...":"검사 시작하기"}
@@ -279,7 +294,8 @@ export default function App(){
         mins={mins}
         total={total}
         totalQ={TOTAL_Q}
-        onRetry={()=>{setStage("company_input");setPage(1);setAnswers({});setAiResults(null);setAiError("");setBasicResults(null);setStartTime(null);setEndTime(null);setTestSet(null);setCompanyValidation(null);}}
+        skipCompanyAI={skipCompanyAI}
+        onRetry={()=>{setStage("company_input");setPage(1);setAnswers({});setAiResults(null);setAiError("");setBasicResults(null);setStartTime(null);setEndTime(null);setTestSet(null);setCompanyValidation(null);setSkipCompanyAI(false);}}
         onAiRetry={()=>{if(basicResults)generateAiResults(basicResults);}}
       />
     );
