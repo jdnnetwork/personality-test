@@ -43,6 +43,7 @@ export default function App(){
   const[aiError,setAiError]=useState("");
   const[basicResults,setBasicResults]=useState(null);
   const[testSet,setTestSet]=useState(null); // {questions, ccPairs, ifIds, revPairs, seed}
+  const[companyValidation,setCompanyValidation]=useState(null); // null | {state:"validating"} | {state:"confirm", correctedName, message} | {state:"error", message}
 
   const questions = testSet?.questions || [];
   const TOTAL_Q=questions.length;
@@ -80,10 +81,48 @@ export default function App(){
     });
   }
 
-  async function analyzeCompanyInBackground(){
-    if(!companyName.trim())return;
-    try{const res=await fetch("/.netlify/functions/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"analyze_company",companyName})});if(res.ok){const data=await res.json();if(!data.error&&!data.parseError)setCompanyData(data);}}catch(e){}
+  async function analyzeCompanyInBackground(nameArg){
+    const name=(nameArg??companyName).trim();
+    if(!name)return;
+    try{const res=await fetch("/.netlify/functions/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"analyze_company",companyName:name})});if(res.ok){const data=await res.json();if(!data.error&&!data.parseError)setCompanyData(data);}}catch(e){}
   }
+
+  // ═══ 기업명 검증 + 검사 시작 ═══
+  function proceedToTest(finalName){
+    setCompanyValidation(null);
+    if(finalName){ setCompanyName(finalName); analyzeCompanyInBackground(finalName); }
+    setStage("pre_tip");
+  }
+
+  async function validateCompanyAndStart(){
+    const input=companyName.trim();
+    if(!input){ setCompanyValidation(null); setStage("pre_tip"); return; }
+    setCompanyValidation({state:"validating"});
+    try{
+      const res=await fetch("/.netlify/functions/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"validate_company",companyName:input})});
+      if(!res.ok)throw new Error(`검증 서버 오류 (${res.status})`);
+      const data=await res.json();
+      if(data.error||data.parseError)throw new Error(data.error||"검증 결과 파싱 실패");
+      if(!data.valid){
+        setCompanyValidation({state:"error",message:data.message||"기업명을 찾을 수 없습니다. 정확한 기업명을 입력해주세요."});
+        return;
+      }
+      const corrected=(data.correctedName||"").trim();
+      if(corrected&&corrected!==input){
+        setCompanyValidation({state:"confirm",correctedName:corrected,message:data.message||`'${corrected}'를 말씀하시나요?`});
+        return;
+      }
+      proceedToTest(input);
+    }catch(e){
+      setCompanyValidation({state:"error",message:`검증 중 오류가 발생했어요. 다시 시도해주세요. (${e.message})`});
+    }
+  }
+
+  function acceptCorrection(){
+    if(companyValidation?.state!=="confirm")return;
+    proceedToTest(companyValidation.correctedName);
+  }
+  function rejectCorrection(){ setCompanyValidation(null); }
 
   async function generateAiResults(basic){
     setStage("test_loading");setAiError("");
@@ -154,20 +193,41 @@ export default function App(){
   );
 
   // ═══ COMPANY INPUT ═══
-  if(stage==="company_input") return(
+  if(stage==="company_input") {
+    const vs=companyValidation?.state;
+    const isValidating=vs==="validating";
+    const isConfirm=vs==="confirm";
+    const isError=vs==="error";
+    return(
     <div style={S.wrap}><div style={S.box}>
       <div style={{height:32}}/>
       <DeepHeader subtitle={"사기업 인성검사 · 200문항 · 약 25분"}/>
       <div style={S.card}>
         <div style={{fontSize:16,fontWeight:700,marginBottom:14,color:"#f1f5f9"}}>지원 기업 (선택)</div>
         <div style={{marginBottom:16}}>
-          <input style={S.input} placeholder="기업명 입력 (예: 삼성전자)" value={companyName} onChange={e=>setCompanyName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){if(companyName.trim())analyzeCompanyInBackground();setStage("pre_tip");}}}/>
+          <input style={{...S.input,borderColor:isError?"rgba(248,113,113,0.5)":S.input.borderColor}} placeholder="기업명 입력 (예: 삼성전자)" value={companyName} disabled={isValidating||isConfirm} onChange={e=>{setCompanyName(e.target.value);if(companyValidation)setCompanyValidation(null);}} onKeyDown={e=>{if(e.key==="Enter"&&!isValidating&&!isConfirm)validateCompanyAndStart();}}/>
         </div>
-        <button style={{...S.btn(true),width:"100%"}} onClick={()=>{if(companyName.trim())analyzeCompanyInBackground();setStage("pre_tip");}}>다음</button>
+        {isConfirm&&<div style={{marginBottom:14,padding:"14px 16px",background:"rgba(96,165,250,0.08)",border:"1px solid rgba(96,165,250,0.3)",borderRadius:12}}>
+          <div style={{fontSize:14,color:"#cbd5e0",lineHeight:1.7,marginBottom:12}}>
+            혹시 <span style={{fontWeight:800,color:"#93c5fd"}}>"{companyValidation.correctedName}"</span>을(를) 말씀하시나요?
+            {companyValidation.message&&companyValidation.message!==`'${companyValidation.correctedName}'를 말씀하시나요?`&&<div style={{fontSize:13,color:"#94a3b8",marginTop:4}}>{companyValidation.message}</div>}
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button style={{...S.btn(true),flex:1,padding:"12px"}} onClick={acceptCorrection}>네, 맞아요</button>
+            <button style={{padding:"12px 20px",border:"1px solid rgba(71,85,105,0.5)",borderRadius:12,background:"rgba(15,23,42,0.5)",color:"#cbd5e0",fontSize:15,fontWeight:700,cursor:"pointer"}} onClick={rejectCorrection}>다시 입력</button>
+          </div>
+        </div>}
+        {isError&&<div style={{marginBottom:14,padding:"12px 16px",background:"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:10}}>
+          <div style={{fontSize:13,color:"#fca5a5",lineHeight:1.7}}>⚠️ {companyValidation.message}</div>
+        </div>}
+        <button style={{...S.btn(true),width:"100%",opacity:isValidating||isConfirm?0.55:1,cursor:isValidating||isConfirm?"not-allowed":"pointer"}} disabled={isValidating||isConfirm} onClick={validateCompanyAndStart}>
+          {isValidating?"기업명 확인 중...":"검사 시작하기"}
+        </button>
         <div style={{textAlign:"center",marginTop:12,fontSize:13,color:"#94a3b8"}}>입력하지 않아도 검사는 진행됩니다</div>
       </div>
     </div></div>
   );
+  }
 
   // ═══ PRE-TIP (검사 전 팁) ═══
   if(stage==="pre_tip") {
@@ -508,7 +568,7 @@ export default function App(){
           <img src="/deepdungi.png" alt="딥둥이" style={{width:52,height:52,borderRadius:"50%",objectFit:"cover",marginBottom:10}}/>
           <div style={{fontSize:13,color:"#64748b",lineHeight:1.8}}>본 검사는 모의 인성검사입니다.<br/><span style={{color:"#94a3b8",fontWeight:600}}>Powered by 457deep · 딥둥이</span></div>
         </div>
-        <button style={{...S.btn(true),width:"100%",padding:"16px",fontSize:16,marginBottom:32}} onClick={()=>{setStage("intro");setMode(null);setPage(1);setAnswers({});setCompanyData(null);setCompanyName("");setAiResults(null);setBasicResults(null);setStartTime(null);setEndTime(null);setTestSet(null);}}>처음부터 다시하기</button>
+        <button style={{...S.btn(true),width:"100%",padding:"16px",fontSize:16,marginBottom:32}} onClick={()=>{setStage("company_input");setPage(1);setAnswers({});setAiResults(null);setAiError("");setBasicResults(null);setStartTime(null);setEndTime(null);setTestSet(null);setCompanyValidation(null);}}>다시 검사하기</button>
       </div></div>
     );
   }
