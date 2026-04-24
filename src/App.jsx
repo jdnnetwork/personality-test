@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { BASE_QUESTIONS, PUBLIC_QUESTIONS, CC_PAIRS, DIM_LABELS, DIMS_ORDER, PUBLIC_DIMS, NEGATIVE_DIMS, NEG_LABELS, PERSONALITY_TYPES, IF_IDS, IF_THRESHOLD } from "./questions.js";
+import { BASE_QUESTIONS, PUBLIC_QUESTIONS, CC_PAIRS, DIM_LABELS, DIMS_ORDER, PUBLIC_DIMS, NEGATIVE_DIMS, NEG_LABELS, PERSONALITY_TYPES, IF_IDS, IF_THRESHOLD, IF_FLAG_MIN } from "./questions.js";
 
 function shuffleWithSeed(arr,seed=42){const a=[...arr];let s=seed;for(let i=a.length-1;i>0;i--){s=(s*16807)%2147483647;const j=s%(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
 const PER_PAGE=10;
@@ -50,7 +50,27 @@ function detectInfrequency(answers) {
     const a = answers[id];
     if (a !== undefined && a >= IF_THRESHOLD) { flagged++; flaggedItems.push(id); }
   });
-  return { detected: flagged >= 1, count: flagged, flaggedItems };
+  // IF_FLAG_MIN개 이상 동의 시에만 감점 대상 (단, 결과에서는 직접 언급하지 않음)
+  return { detected: flagged >= IF_FLAG_MIN, count: flagged, flaggedItems };
+}
+
+function detectLowVariance(answers, questions) {
+  // 성격 차원 측정 문항만 (CC/SD/IF 제외) 대상으로 표준편차 계산
+  const vals = questions
+    .filter(q => q.dim !== "CC" && q.dim !== "SD" && q.dim !== "IF")
+    .map(q => answers[q.id])
+    .filter(a => a !== undefined);
+  if (vals.length < 10) return { detected: false };
+  const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const variance = vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length;
+  const std = Math.sqrt(variance);
+  return { detected: std < 0.5 };
+}
+
+function detectExtremeHigh(adjustedScores, dims) {
+  // 보정 후 85점 이상인 차원 개수
+  const highCount = dims.filter(d => (adjustedScores[d] || 0) >= 85).length;
+  return { detected: highCount >= 7, count: highCount, total: dims.length };
 }
 
 function detectStatisticalOutlier(scores) {
@@ -67,6 +87,31 @@ function detectStatisticalOutlier(scores) {
     extremeLows,
     detected: allAbove85 || avgAbove80 || extremeLows.length > 0
   };
+}
+
+// ═══ 점수 보정 ═══
+function adjustScore(raw) {
+  // 표시점수 = 원점수 × 0.6 + 30, 하한 25 · 상한 95
+  return Math.min(95, Math.max(25, Math.round(raw * 0.6 + 30)));
+}
+function adjustCompanyScore(raw) {
+  // 기업 적합도 = AI 결과 + 10, 상한 95
+  if (typeof raw !== "number") return raw;
+  return Math.min(95, Math.max(0, Math.round(raw + 10)));
+}
+
+function computeTrustScore(conP, sdP, vc) {
+  const honesty = 100 - sdP;
+  let raw = conP * 0.6 + honesty * 0.4;
+  let penalty = 0;
+  if (vc.allSame?.detected) penalty += 20;
+  if (vc.infrequency?.detected) penalty += 15;
+  if (vc.lowVariance?.detected) penalty += 15;
+  if (vc.extremeHigh?.detected) penalty += 10;
+  raw = Math.max(0, Math.round(raw - penalty));
+  const display = Math.max(35, raw); // 하한 35 (원점수 40 미만이면 35로 끌어올림)
+  const level = raw >= 80 ? "매우 높음" : raw >= 65 ? "양호" : raw >= 50 ? "보통" : raw >= 40 ? "주의" : "경고";
+  return { raw, display, penalty, level };
 }
 
 export default function App(){
@@ -127,14 +172,24 @@ export default function App(){
     let conP=50;const allD=[...ccDiffs,...dimDiffs];
     if(allD.length>0){conP=Math.max(0,Math.round((1-allD.reduce((a,b)=>a+b,0)/allD.length/4)*100));}
 
+    // ═══ 보정 점수 (일반 차원만; 부적격 요인은 원점수 유지) ═══
+    const posDims = [...DIMS_ORDER, ...(mode==="public"?PUBLIC_DIMS:[])];
+    const adjScores = {...sc};
+    posDims.forEach(d => { adjScores[d] = adjustScore(sc[d] || 0); });
+
     // ═══ 이상치 탐지 ═══
     const allSame = detectAllSame(answers, questions);
     const ifResult = detectInfrequency(answers);
     const outlier = detectStatisticalOutlier(sc);
+    const lowVariance = detectLowVariance(answers, questions);
+    const extremeHigh = detectExtremeHigh(adjScores, posDims);
+
+    const vc = { allSame, infrequency: ifResult, outlier, lowVariance, extremeHigh };
+    const trust = computeTrustScore(conP, sdP, vc);
 
     const pType=PERSONALITY_TYPES.find(t=>t.condition(sc))||PERSONALITY_TYPES[7];
-    return{scores:sc,sdPct:sdP,consistencyPct:conP,personalityType:pType,
-      validityChecks: { allSame, infrequency: ifResult, outlier }
+    return{scores:sc, adjustedScores:adjScores, sdPct:sdP, consistencyPct:conP, trustScore:trust, personalityType:pType,
+      validityChecks: vc
     };
   }
 
@@ -145,7 +200,7 @@ export default function App(){
 
   async function generateAiResults(basic){
     setStage("test_loading");setAiError("");
-    try{const res=await fetch("/.netlify/functions/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"generate_results",testResults:{companyName:companyData?.companyName||companyName||"일반",companyProfile:companyData?.bigFiveProfile||null,scores:basic.scores,personalityType:basic.personalityType.name,consistencyScore:basic.consistencyPct,honestyScore:100-basic.sdPct,validityChecks:basic.validityChecks}})});
+    try{const res=await fetch("/.netlify/functions/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"generate_results",testResults:{companyName:companyData?.companyName||companyName||"일반",companyProfile:companyData?.bigFiveProfile||null,scores:basic.scores,adjustedScores:basic.adjustedScores,personalityType:basic.personalityType.name,consistencyScore:basic.consistencyPct,honestyScore:100-basic.sdPct,trustScore:basic.trustScore?.display,validityChecks:basic.validityChecks}})});
       if(!res.ok){setAiError(`서버 오류 (${res.status})`);setStage("result");return;}
       const data=await res.json();if(data.error||data.parseError){setAiError(data.error||"AI 결과 생성 실패");setStage("result");return;}
       setAiResults(data);setStage("result");
@@ -195,13 +250,13 @@ export default function App(){
           <div style={S.modeBtn(mode==="private")} onClick={()=>setMode("private")}>
             <div style={{fontSize:28,marginBottom:8}}>🏢</div>
             <div style={{fontSize:16,fontWeight:700,color:mode==="private"?"#60a5fa":"#cbd5e0"}}>사기업</div>
-            <div style={{fontSize:13,color:"#94a3b8",marginTop:4}}>203문항 · 약 25분</div>
+            <div style={{fontSize:13,color:"#94a3b8",marginTop:4}}>204문항 · 약 25분</div>
             <div style={{fontSize:11,color:"#64748b",marginTop:6}}>삼성, SK, 현대, LG, CJ 등</div>
           </div>
           <div style={S.modeBtn(mode==="public")} onClick={()=>setMode("public")}>
             <div style={{fontSize:28,marginBottom:8}}>🏛️</div>
             <div style={{fontSize:16,fontWeight:700,color:mode==="public"?"#60a5fa":"#cbd5e0"}}>공공기관</div>
-            <div style={{fontSize:13,color:"#94a3b8",marginTop:4}}>243문항 · 약 30분</div>
+            <div style={{fontSize:13,color:"#94a3b8",marginTop:4}}>244문항 · 약 30분</div>
             <div style={{fontSize:11,color:"#64748b",marginTop:6}}>공기업, 준정부, 공공기관</div>
           </div>
         </div>
@@ -216,11 +271,11 @@ export default function App(){
           {mode==="public"&&<><span style={{...S.tag,background:"rgba(139,92,246,0.15)",color:"#c4b5fd"}}>윤리성</span><span style={{...S.tag,background:"rgba(248,113,113,0.1)",color:"#fca5a5"}}>부적격 요인 탐지</span></>}
         </div>
         <div style={{fontSize:13,color:"#a78bfa",padding:"10px 14px",background:"rgba(139,92,246,0.08)",borderRadius:10,border:"1px solid rgba(139,92,246,0.15)",lineHeight:1.7,marginBottom:12}}>
-          🔍 <span style={{fontWeight:700}}>탐지 시스템</span>: 사회적 바람직성(SD) 5문항 · 일관성 검증(CC) 9쌍 · 차원 내 정역 쌍 10개 · <span style={{color:"#f87171",fontWeight:700}}>비빈도(IF) 3문항</span> · <span style={{color:"#f87171",fontWeight:700}}>올-세임 탐지</span> · <span style={{color:"#f87171",fontWeight:700}}>통계적 이상치 탐지</span>
+          🔍 <span style={{fontWeight:700}}>탐지 시스템</span>: 응답 신뢰도 통합 지표 · 사회적 바람직성(SD) 5문항 · 일관성 검증(CC) 9쌍 · 차원 내 정역 쌍 10개 · <span style={{color:"#f87171",fontWeight:700}}>비빈도(IF) 4문항</span> · <span style={{color:"#f87171",fontWeight:700}}>올-세임/로우-배리언스 탐지</span> · <span style={{color:"#f87171",fontWeight:700}}>극단값 패턴 탐지</span>
         </div>
         <div style={{fontSize:15,lineHeight:2.2,color:"#cbd5e0"}}>
           <span style={{color:"#60a5fa",fontWeight:700}}>STEP 1</span> 지원 기업/기관명 입력 (선택)<br/>
-          <span style={{color:"#a78bfa",fontWeight:700}}>STEP 2</span> {mode==="public"?"243":"203"}문항 인성검사<br/>
+          <span style={{color:"#a78bfa",fontWeight:700}}>STEP 2</span> {mode==="public"?"244":"204"}문항 인성검사<br/>
           <span style={{color:"#c084fc",fontWeight:700}}>STEP 3</span> AI 맞춤 결과 + TIP 제공
         </div>
       </div>
@@ -236,7 +291,7 @@ export default function App(){
   if(stage==="company_input") return(
     <div style={S.wrap}><div style={S.box}>
       <div style={{height:32}}/>
-      <DeepHeader subtitle={`${mode==="public"?"공공기관":"사기업"} 모드 · ${mode==="public"?"243":"203"}문항`}/>
+      <DeepHeader subtitle={`${mode==="public"?"공공기관":"사기업"} 모드 · ${mode==="public"?"244":"204"}문항`}/>
       <div style={S.card}>
         <div style={{fontSize:16,fontWeight:700,marginBottom:14,color:"#f1f5f9"}}>지원 {mode==="public"?"기관":"기업"} (선택)</div>
         <div style={{marginBottom:16}}>
@@ -252,110 +307,128 @@ export default function App(){
 
   // ═══ RESULT ═══
   if(stage==="result"&&basicResults){
-    const{scores:sc,sdPct:sdP,consistencyPct:conP,personalityType:pType,validityChecks:vc}=basicResults;
+    const{scores:sc,adjustedScores:adj,sdPct:sdP,consistencyPct:conP,trustScore:trust,personalityType:pType,validityChecks:vc}=basicResults;
     const mins=endTime&&startTime?Math.round((endTime-startTime)/60000):"–";
     const radarDims=mode==="public"?[...DIMS_ORDER,...PUBLIC_DIMS]:DIMS_ORDER;
     const radarLabels={...DIM_LABELS};
     const getPercentile=(s)=>s>=90?"상위 5%":s>=80?"상위 10%":s>=70?"상위 20%":s>=60?"상위 35%":s>=50?"평균":s>=40?"하위 35%":s>=30?"하위 20%":"하위 10%";
     const getPctColor=(s)=>s>=70?"#6ee7b7":s>=50?"#fbbf24":"#f87171";
 
-    // 종합 경고 레벨
-    const hasAnyWarning = vc.allSame.detected || vc.infrequency.detected || vc.outlier.detected;
+    // 응답 신뢰도 색상
+    const trustColor = trust.raw >= 80 ? "#6ee7b7" : trust.raw >= 65 ? "#fbbf24" : trust.raw >= 50 ? "#fb923c" : "#f87171";
+    // 신뢰도 내부 요소 해석 (일관성·솔직성·탐지 이슈를 풀어서 설명)
+    const conLv = conP>=80?"매우 일관적":conP>=60?"양호":conP>=40?"일부 모순":"응답 모순 심각";
+    const sdLv = sdP<=40?"매우 솔직":sdP<=60?"양호":"과장 응답 경향 일부 감지";
+    const trustNarrative = (() => {
+      const parts = [];
+      parts.push(`일관성은 ${conLv}`);
+      parts.push(`솔직성은 ${sdLv}`);
+      if (vc.allSame.detected) parts.push("연속 동일값 패턴이 감지되어 감점");
+      if (vc.lowVariance.detected) parts.push("응답 변동이 매우 적어 감점");
+      if (vc.extremeHigh.detected) parts.push("전반적으로 점수가 과도하게 높아 감점");
+      if (vc.infrequency.detected) parts.push("일부 응답 패턴에서 주의가 필요해 감점");
+      return parts.join(" · ");
+    })();
+
+    // 종합 경고 레벨 (비빈도는 직접 언급하지 않음)
+    const hasAnyWarning = vc.allSame.detected || vc.lowVariance.detected || vc.extremeHigh.detected || vc.outlier.extremeLows.length > 0;
 
     return(
       <div style={S.wrap}><div style={S.box}>
         <div style={{height:16}}/>
         <DeepHeader subtitle={`${mode==="public"?"공공기관":"사기업"} 모드 · 소요: ${mins}분 · ${total}/${TOTAL_Q}문항`}/>
 
-        {/* ═══ 이상치/무성의 경고 카드 (최상단) ═══ */}
-        {hasAnyWarning && <div style={{...S.alertCard("248,113,113"),border:"2px solid rgba(248,113,113,0.5)",background:"rgba(248,113,113,0.08)"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-            <span style={{fontSize:26}}>🚨</span>
-            <span style={{fontSize:20,fontWeight:900,color:"#f87171"}}>응답 유효성 경고</span>
+        {/* ═══ 응답 패턴 점검 카드 (최상단) — 진단+코칭 톤 ═══ */}
+        {hasAnyWarning && <div style={{...S.alertCard("251,146,60"),border:"2px solid rgba(251,146,60,0.45)",background:"rgba(251,146,60,0.06)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+            <span style={{fontSize:26}}>🧭</span>
+            <span style={{fontSize:20,fontWeight:900,color:"#fdba74"}}>응답 패턴 점검</span>
           </div>
-          <div style={{fontSize:14,color:"#fca5a5",lineHeight:1.9,marginBottom:16}}>
-            실제 인성검사에서 아래 패턴이 탐지되면 <span style={{fontWeight:800,color:"#f87171"}}>결과 무효 또는 재검사 대상</span>이 될 수 있습니다. 정규분포 중간 범위(30~70점)가 정상적 응답이며, 너무 좋은 결과도 탈락 사유입니다.
+          <div style={{fontSize:14,color:"#fcd9b6",lineHeight:1.9,marginBottom:16}}>
+            아래 몇 가지 포인트만 <span style={{fontWeight:800,color:"#fdba74"}}>조금만 조정하면</span> 실제 검사에서 충분히 통과할 수 있는 프로파일이에요. 완벽함보다 <span style={{fontWeight:700}}>자연스러운 강약 차이</span>가 좋은 평가를 받습니다.
           </div>
 
           {/* 올-세임 탐지 */}
-          {vc.allSame.detected && <div style={{padding:"14px 18px",background:"rgba(248,113,113,0.08)",borderRadius:12,border:"1px solid rgba(248,113,113,0.2)",marginBottom:12}}>
-            <div style={{fontSize:16,fontWeight:800,color:"#f87171",marginBottom:6}}>🔴 무성의 응답 탐지 (All-Same)</div>
+          {vc.allSame.detected && <div style={{padding:"14px 18px",background:"rgba(248,113,113,0.06)",borderRadius:12,border:"1px solid rgba(248,113,113,0.2)",marginBottom:12}}>
+            <div style={{fontSize:16,fontWeight:800,color:"#fca5a5",marginBottom:6}}>🔁 연속 동일값 패턴</div>
             <div style={{fontSize:14,color:"#e2e8f0",lineHeight:1.8}}>
-              연속 <span style={{fontWeight:800,color:"#f87171"}}>{vc.allSame.maxRun}문항</span>이 동일한 값으로 응답되었습니다.
-              실제 검사에서 연속 20문항 이상 같은 값이면 <span style={{fontWeight:700}}>무성의 응답으로 자동 판정</span>됩니다.
+              연속 <span style={{fontWeight:800,color:"#fca5a5"}}>{vc.allSame.maxRun}문항</span>이 같은 값으로 응답되었어요.
+              각 문항을 찬찬히 읽고 본인 성향에 맞게 <span style={{fontWeight:700}}>2~4점 사이에서 분산</span>만 해도 이 포인트는 자연스럽게 해결됩니다.
             </div>
           </div>}
 
-          {/* 비빈도(IF) 탐지 */}
-          {vc.infrequency.detected && <div style={{padding:"14px 18px",background:"rgba(248,113,113,0.08)",borderRadius:12,border:"1px solid rgba(248,113,113,0.2)",marginBottom:12}}>
-            <div style={{fontSize:16,fontWeight:800,color:"#f87171",marginBottom:6}}>🔴 비빈도(Infrequency) 문항 탐지</div>
+          {/* 로우-배리언스 (무성의 응답 — 응답 변동 매우 적음) */}
+          {vc.lowVariance.detected && <div style={{padding:"14px 18px",background:"rgba(248,113,113,0.06)",borderRadius:12,border:"1px solid rgba(248,113,113,0.2)",marginBottom:12}}>
+            <div style={{fontSize:16,fontWeight:800,color:"#fca5a5",marginBottom:6}}>📉 무성의 응답 — 응답 변동 적음</div>
             <div style={{fontSize:14,color:"#e2e8f0",lineHeight:1.8}}>
-              정상적인 응답자가 거의 선택하지 않는 극단적 진술에 <span style={{fontWeight:800,color:"#f87171"}}>{vc.infrequency.count}개</span> 동의했습니다.
-              이런 문항은 무성의하게 응답하거나, 문항을 읽지 않고 찍는 패턴을 탐지하기 위해 설계되었습니다.
-              실제 검사에서는 <span style={{fontWeight:700}}>비정상 응답 패턴으로 분류</span>됩니다.
+              응답 변동이 매우 적습니다. 각 문항에 분명한 의견을 표현해보세요.
+              문항마다 <span style={{fontWeight:700}}>"나는 정말 이런 사람인가?"</span>를 떠올리며 2~4점대에서 강약을 주면 자연스러운 프로파일이 됩니다.
             </div>
           </div>}
 
-          {/* 통계적 이상치 */}
-          {vc.outlier.allHigh && <div style={{padding:"14px 18px",background:"rgba(248,113,113,0.08)",borderRadius:12,border:"1px solid rgba(248,113,113,0.2)",marginBottom:12}}>
-            <div style={{fontSize:16,fontWeight:800,color:"#f87171",marginBottom:6}}>🔴 통계적 이상치 — 비현실적 응답 패턴</div>
+          {/* 극단값 패턴 — 보정 후 85+ 차원 7개 이상 */}
+          {vc.extremeHigh.detected && <div style={{padding:"14px 18px",background:"rgba(251,146,60,0.08)",borderRadius:12,border:"1px solid rgba(251,146,60,0.25)",marginBottom:12}}>
+            <div style={{fontSize:16,fontWeight:800,color:"#fdba74",marginBottom:6}}>✨ 전반적 고점 — 강약 조절이 필요해요</div>
             <div style={{fontSize:14,color:"#e2e8f0",lineHeight:1.8}}>
-              <span style={{fontWeight:800,color:"#f87171"}}>전 차원이 85점 이상</span>으로 나타났습니다.
-              실제 인성검사에서 모든 영역이 극단적으로 높은 결과는 통계적으로 0.1% 미만의 확률이며, <span style={{fontWeight:700}}>과장 응답 또는 의도적 조작</span>으로 판정됩니다.
+              모든 차원에서 최고점을 받는 것보다 <span style={{fontWeight:700}}>자연스러운 강약 차이</span>가 있는 것이 오히려 좋은 평가를 받습니다.
+              실제 검사에서 이런 패턴은 <span style={{fontWeight:700}}>비현실적 응답으로 분류</span>될 수 있어요.
+              강점 2~3개는 확실히 드러내되, 나머지 영역은 솔직하게 "보통"으로 두면 훨씬 설득력 있는 결과가 됩니다.
             </div>
           </div>}
 
-          {vc.outlier.avgHigh && !vc.outlier.allHigh && <div style={{padding:"14px 18px",background:"rgba(251,146,60,0.08)",borderRadius:12,border:"1px solid rgba(251,146,60,0.2)",marginBottom:12}}>
-            <div style={{fontSize:16,fontWeight:800,color:"#fdba74",marginBottom:6}}>🟡 전체 평균 과도 — 주의 필요</div>
+          {/* 기존: 평균 과도 — 코칭 톤으로 유지 */}
+          {vc.outlier.avgHigh && !vc.extremeHigh.detected && <div style={{padding:"14px 18px",background:"rgba(251,146,60,0.06)",borderRadius:12,border:"1px solid rgba(251,146,60,0.2)",marginBottom:12}}>
+            <div style={{fontSize:16,fontWeight:800,color:"#fdba74",marginBottom:6}}>📊 전체 평균이 조금 높아요</div>
             <div style={{fontSize:14,color:"#e2e8f0",lineHeight:1.8}}>
-              9개 차원 평균이 <span style={{fontWeight:800,color:"#fdba74"}}>{vc.outlier.avg}점</span>으로, 80점 이상입니다.
-              자연스러운 성격 프로파일에서는 강점과 약점이 공존합니다. 지나치게 좋은 결과는 오히려 신뢰도를 떨어뜨립니다.
+              자연스러운 성격 프로파일에는 강점과 보완점이 공존해요. 과도한 고점은 오히려 신뢰도를 낮출 수 있으니,
+              본인이 <span style={{fontWeight:700}}>덜 자신 있는 영역</span>은 솔직하게 응답해도 괜찮아요.
             </div>
           </div>}
 
-          {vc.outlier.extremeLows.length > 0 && <div style={{padding:"14px 18px",background:"rgba(251,146,60,0.08)",borderRadius:12,border:"1px solid rgba(251,146,60,0.2)",marginBottom:12}}>
-            <div style={{fontSize:16,fontWeight:800,color:"#fdba74",marginBottom:6}}>🟡 극단적 저점 탐지</div>
+          {/* 극단적 저점 — 코칭 톤 */}
+          {vc.outlier.extremeLows.length > 0 && <div style={{padding:"14px 18px",background:"rgba(251,146,60,0.06)",borderRadius:12,border:"1px solid rgba(251,146,60,0.2)",marginBottom:12}}>
+            <div style={{fontSize:16,fontWeight:800,color:"#fdba74",marginBottom:6}}>🎯 특정 영역 보강 포인트</div>
             <div style={{fontSize:14,color:"#e2e8f0",lineHeight:1.8}}>
-              {vc.outlier.extremeLows.map(d => DIM_LABELS[d] || d).join(", ")} 차원이 <span style={{fontWeight:800,color:"#fdba74"}}>20점 이하</span>입니다.
-              극단적으로 낮은 점수는 면접관의 집중 질문 대상이 되며, 해당 영역에 대한 보완 준비가 필요합니다.
+              {vc.outlier.extremeLows.map(d => DIM_LABELS[d] || d).join(", ")} 영역이 상당히 낮게 나왔어요.
+              역문항을 반대로 읽지 않았는지 한 번만 점검하면, 이 부분은 금방 자연스러운 범위로 올라옵니다.
             </div>
           </div>}
         </div>}
 
-        {/* 신뢰도 */}
-        <div style={{...S.card,display:"flex",gap:16,flexWrap:"wrap"}}>
-          <div style={{flex:1,minWidth:120}}>
-            <span style={S.badge(conP>=60)}>일관성</span>
-            <span style={{fontSize:22,fontWeight:800,color:conP>=60?"#6ee7b7":"#fdba74"}}>{conP}%</span>
-            <div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>{conP>=80?"매우 일관적":conP>=60?"대체로 일관적":conP>=40?"일부 모순":"응답 모순 심각"}</div>
+        {/* 응답 신뢰도 (통합 지표) */}
+        <div style={{...S.card,textAlign:"center",padding:"28px 22px"}}>
+          <div style={{fontSize:13,letterSpacing:2,color:"#94a3b8",fontWeight:700,marginBottom:8}}>응답 신뢰도</div>
+          <div style={{fontSize:64,fontWeight:900,color:trustColor,lineHeight:1.1,marginBottom:6}}>{trust.display}%</div>
+          <div style={{fontSize:14,fontWeight:700,color:trustColor,marginBottom:14}}>{trust.level}</div>
+          <div style={{fontSize:13,color:"#cbd5e0",lineHeight:1.7,padding:"10px 14px",background:"rgba(15,23,42,0.45)",borderRadius:10,textAlign:"left"}}>
+            {trustNarrative}
           </div>
-          <div style={{flex:1,minWidth:120}}>
-            <span style={S.badge(sdP<=60)}>솔직성</span>
-            <span style={{fontSize:22,fontWeight:800,color:sdP<=60?"#6ee7b7":"#fdba74"}}>{100-sdP}%</span>
-            <div style={{fontSize:12,color:"#94a3b8",marginTop:3}}>{sdP<=40?"매우 솔직":sdP<=60?"대체로 솔직":"과장 응답 경향"}</div>
-          </div>
+          {trust.raw < 40 && <div style={{fontSize:12,color:"#fdba74",marginTop:10,lineHeight:1.6,textAlign:"left",padding:"8px 12px",background:"rgba(251,146,60,0.08)",borderRadius:8,border:"1px solid rgba(251,146,60,0.2)"}}>
+            ⚠️ 신뢰도 내부 원점수가 낮습니다. 문항을 한 번 더 천천히 읽고 재검사를 권장해요. (실제 검사에서는 재검사 대상이 될 수 있는 구간이에요.)
+          </div>}
         </div>
 
-        {/* 레이더 */}
+        {/* 레이더 — 보정 점수 기반 */}
         <div style={S.card}>
           <div style={S.secTtl}>성격 프로파일{companyData?" vs 기업 인재상":""}</div>
-          <div style={{display:"flex",justifyContent:"center"}}><AnimatedRadar scores={sc} dims={radarDims} labels={radarLabels} companyProfile={companyData?.bigFiveProfile}/></div>
+          <div style={{display:"flex",justifyContent:"center"}}><AnimatedRadar scores={adj} dims={radarDims} labels={radarLabels} companyProfile={companyData?.bigFiveProfile}/></div>
+          <div style={{fontSize:12,color:"#64748b",textAlign:"center",marginTop:8}}>※ 차원별 점수는 실전 감각에 맞춰 보정(scaling)된 표시 점수입니다.</div>
         </div>
 
-        {/* 차원별 점수 */}
+        {/* 차원별 점수 — 보정 점수 */}
         <div style={S.card}>
           <div style={S.secTtl}>차원별 상세 점수</div>
           {radarDims.map(d=>(
             <div key={d} style={S.dimBar}>
-              <div style={S.dimLbl}><span>{radarLabels[d]||d}</span><span style={{fontWeight:700,color:"#60a5fa"}}>{sc[d]}</span></div>
-              <div style={S.barBg}><div style={S.barFill(sc[d])}/></div>
+              <div style={S.dimLbl}><span>{radarLabels[d]||d}</span><span style={{fontWeight:700,color:"#60a5fa"}}>{adj[d]}</span></div>
+              <div style={S.barBg}><div style={S.barFill(adj[d])}/></div>
             </div>
           ))}
         </div>
 
-        {/* 강약점 맵 */}
+        {/* 강약점 맵 — 보정 점수 */}
         {(()=>{
-          const sorted=radarDims.map(d=>({d,s:sc[d]})).sort((a,b)=>b.s-a.s);
+          const sorted=radarDims.map(d=>({d,s:adj[d]})).sort((a,b)=>b.s-a.s);
           const top3=sorted.slice(0,3),bot3=sorted.slice(-3).reverse();
           return(<div style={S.card}>
             <div style={S.secTtl}>📌 나의 강약점 맵</div>
@@ -367,7 +440,7 @@ export default function App(){
               <div style={{fontSize:15,fontWeight:700,color:"#fb923c",marginBottom:10}}>🔻 보완 필요 TOP 3</div>
               {bot3.map(({d,s},i)=>(<div key={d} style={{display:"flex",alignItems:"center",gap:12,marginBottom:8,padding:"10px 14px",background:"rgba(251,146,60,0.06)",borderRadius:10,border:"1px solid rgba(251,146,60,0.15)"}}><span style={{fontSize:20,fontWeight:900,color:"#fb923c",width:24}}>{i+1}</span><span style={{fontSize:15,fontWeight:700,color:"#e2e8f0",flex:1}}>{radarLabels[d]||d}</span><span style={{fontSize:18,fontWeight:800,color:"#60a5fa"}}>{s}점</span><span style={{fontSize:12,fontWeight:700,color:getPctColor(s),background:"rgba(0,0,0,0.2)",padding:"3px 8px",borderRadius:8}}>{getPercentile(s)}</span></div>))}
             </div>
-            {bot3[0]&&bot3[0].s<40&&<div style={{fontSize:13,color:"#fb923c"}}>⚠️ {radarLabels[bot3[0].d]||bot3[0].d}이(가) 하위권입니다. 면접에서 이 영역 관련 질문이 집중될 수 있습니다.</div>}
+            {bot3[0]&&bot3[0].s<40&&<div style={{fontSize:13,color:"#fb923c"}}>💡 {radarLabels[bot3[0].d]||bot3[0].d} 영역을 조금만 보완하면 프로파일이 훨씬 균형 잡힐 수 있어요. 관련 경험을 한두 개 준비해두면 면접에서 강점으로 바꿀 수 있습니다.</div>}
           </div>);
         })()}
 
@@ -412,41 +485,59 @@ export default function App(){
           })}
         </div>}
 
-        {/* 검증 지표 해석 */}
+        {/* 응답 신뢰도 상세 해석 (일관성+솔직성을 풀어서 설명) */}
         <div style={S.card}>
-          <div style={S.secTtl}>📊 검증 지표 상세 해석</div>
+          <div style={S.secTtl}>📊 응답 신뢰도 상세 해석</div>
+          <div style={{fontSize:15,lineHeight:1.9,color:"#e2e8f0",marginBottom:14,padding:"12px 16px",background:"rgba(15,23,42,0.5)",borderRadius:10}}>
+            응답 신뢰도는 <span style={{fontWeight:700,color:"#a78bfa"}}>일관성(60%) + 솔직성(40%)</span>을 합산하고,
+            무성의 응답·극단값 패턴이 감지되면 감점을 반영한 통합 지표입니다.
+          </div>
           <div style={{marginBottom:18}}>
-            <div style={{fontSize:16,fontWeight:700,color:conP>=80?"#6ee7b7":conP>=60?"#fbbf24":conP>=40?"#fb923c":"#f87171",marginBottom:8}}>일관성 {conP}% — {conP>=80?"매우 우수":conP>=60?"양호":conP>=40?"개선 필요":"심각한 모순"}</div>
-            <div style={{fontSize:15,lineHeight:1.8,color:"#e2e8f0"}}>{conP>=80?"비슷한 내용의 문항에 일관되게 응답했습니다.":conP>=60?"대체로 일관적이지만 일부 문항에서 모순이 발견됩니다.":conP>=40?"응답에 상당한 모순이 있습니다. 역문항에 주의하세요.":"응답 일관성이 매우 낮습니다. 실제 검사에서 재검사 대상이 됩니다."}</div>
+            <div style={{fontSize:15,fontWeight:700,color:conP>=80?"#6ee7b7":conP>=60?"#fbbf24":conP>=40?"#fb923c":"#f87171",marginBottom:6}}>· 일관성 요소 — {conLv}</div>
+            <div style={{fontSize:14,lineHeight:1.8,color:"#cbd5e0",paddingLeft:12}}>{conP>=80?"비슷한 내용의 문항에 일관되게 응답했어요. 아주 좋은 신호입니다.":conP>=60?"대체로 일관적이지만 몇 문항에서 소소한 모순이 있어요. 역문항만 조금 주의하면 쉽게 끌어올릴 수 있어요.":conP>=40?"역문항과 정문항 사이 모순이 꽤 보입니다. '~하지 않는다'류 표현을 반대로 읽었는지 점검하면 빠르게 개선됩니다.":"응답 일관성이 낮아 실제 검사에서 재검사 대상이 될 수 있어요. 다음엔 문항을 한 번 더 천천히 읽어주세요."}</div>
           </div>
           <div>
-            <div style={{fontSize:16,fontWeight:700,color:sdP<=40?"#6ee7b7":sdP<=60?"#fbbf24":"#f87171",marginBottom:8}}>솔직성 {100-sdP}% — {sdP<=40?"매우 솔직":sdP<=60?"양호":"과장 응답 주의"}</div>
-            <div style={{fontSize:15,lineHeight:1.8,color:"#e2e8f0"}}>{sdP<=40?"자신의 약점도 솔직하게 인정하는 응답 패턴입니다.":sdP<=60?"대체로 솔직하지만 일부 과장된 응답이 있습니다.":"과장 응답 경향이 강합니다. 실제 검사에서 결과 무효 처리될 수 있습니다."}</div>
+            <div style={{fontSize:15,fontWeight:700,color:sdP<=40?"#6ee7b7":sdP<=60?"#fbbf24":"#f87171",marginBottom:6}}>· 솔직성 요소 — {sdLv}</div>
+            <div style={{fontSize:14,lineHeight:1.8,color:"#cbd5e0",paddingLeft:12}}>{sdP<=40?"자신의 약점도 솔직하게 인정하는 응답 패턴이에요. 실제 검사에서도 신뢰 받는 방향입니다.":sdP<=60?"대체로 솔직하지만 일부 '너무 완벽한' 응답이 섞여 있어요. 한두 문항만 더 현실적으로 답하면 충분히 통과할 수 있어요.":"과장 응답 경향이 강합니다. 약점을 인정하는 답변 1~2개만 포함해도 이 부분은 바로 개선됩니다."}</div>
           </div>
+          {trust.penalty > 0 && <div style={{marginTop:18,padding:"12px 16px",background:"rgba(251,146,60,0.06)",borderRadius:10,border:"1px solid rgba(251,146,60,0.2)"}}>
+            <div style={{fontSize:14,fontWeight:700,color:"#fdba74",marginBottom:6}}>· 응답 패턴 감점 반영</div>
+            <div style={{fontSize:13,lineHeight:1.8,color:"#cbd5e0"}}>
+              응답 패턴 점검 카드에서 언급된 항목으로 인해 신뢰도에서 일부 감점이 반영되었어요.
+              위 "응답 패턴 점검" 섹션의 코칭 포인트만 반영하면 신뢰도는 빠르게 회복됩니다.
+            </div>
+          </div>}
         </div>
 
-        {/* 재검사 가이드 */}
+        {/* 실전 대비 코칭 가이드 — 진단+코칭 톤 */}
         {(conP<70||sdP>50||hasAnyWarning)&&<div style={{...S.card,border:"1px solid rgba(139,92,246,0.3)",background:"rgba(139,92,246,0.06)"}}>
-          <div style={S.secTtl}>📝 실전 인성검사 대비 가이드</div>
+          <div style={S.secTtl}>📝 실전 통과를 위한 코칭 가이드</div>
+          <div style={{fontSize:14,color:"#cbd5e0",lineHeight:1.8,marginBottom:16,padding:"10px 14px",background:"rgba(139,92,246,0.08)",borderRadius:10}}>
+            아래 포인트를 <span style={{fontWeight:700,color:"#c4b5fd"}}>하나씩만 반영</span>해도 실제 검사에서 충분히 통과할 수 있어요. "부족해서"가 아니라 "이 부분만 다듬으면 확실히 통과"하는 관점으로 읽어주세요.
+          </div>
 
           {hasAnyWarning&&<div style={{marginBottom:20}}>
-            <div style={{fontSize:16,fontWeight:700,color:"#f87171",marginBottom:10}}>응답 패턴 교정 방법</div>
+            <div style={{fontSize:16,fontWeight:700,color:"#a78bfa",marginBottom:10}}>응답 패턴 개선 포인트</div>
             <div style={{fontSize:14,lineHeight:1.9,color:"#e2e8f0"}}>
               {vc.allSame.detected&&<div style={{marginBottom:12,padding:"12px 16px",background:"rgba(15,23,42,0.4)",borderRadius:10}}>
-                <div style={{fontWeight:700,color:"#fca5a5",marginBottom:6}}>무성의 응답(All-Same) 교정</div>
-                모든 문항을 같은 값으로 찍으면 AI가 즉시 탐지합니다. 각 문항을 실제로 읽고, 자신의 성향에 맞게 2~4점 사이에서 자연스럽게 분산하세요. 실제 검사에서는 연속 10문항만 같아도 주의 대상입니다.
+                <div style={{fontWeight:700,color:"#c4b5fd",marginBottom:6}}>1. 같은 값만 계속 선택하지 마세요</div>
+                각 문항을 실제로 읽고 본인 성향에 맞춰 <span style={{fontWeight:700}}>2~4점 사이에서 자연스럽게 분산</span>하면 충분해요. 연속 10문항만 같아도 주의 대상이지만, 이것만 지키면 쉽게 통과할 수 있어요.
               </div>}
-              {vc.infrequency.detected&&<div style={{marginBottom:12,padding:"12px 16px",background:"rgba(15,23,42,0.4)",borderRadius:10}}>
-                <div style={{fontWeight:700,color:"#fca5a5",marginBottom:6}}>비빈도(IF) 문항 대처법</div>
-                "현실이 꿈인지 구분이 안 된다" 같은 극단적 진술은 함정 문항입니다. 정상적인 응답자는 이런 문항에 "전혀 아니다(1)" 또는 "아니다(2)"를 선택합니다. "그렇다" 이상을 고르면 무성의 응답 또는 비정상 패턴으로 분류됩니다.
+              {vc.lowVariance.detected&&<div style={{marginBottom:12,padding:"12px 16px",background:"rgba(15,23,42,0.4)",borderRadius:10}}>
+                <div style={{fontWeight:700,color:"#c4b5fd",marginBottom:6}}>2. 각 문항에 분명한 의견을 표현하세요</div>
+                응답 변동이 매우 적습니다. 모든 문항에 비슷한 점수만 주면 "생각 없이 답했다"로 해석돼요. <span style={{fontWeight:700}}>확실히 동의하는 것엔 4~5점, 아닌 것엔 1~2점</span>을 과감하게 사용하면 프로파일이 선명해집니다.
               </div>}
-              {(vc.outlier.allHigh||vc.outlier.avgHigh)&&<div style={{marginBottom:12,padding:"12px 16px",background:"rgba(15,23,42,0.4)",borderRadius:10}}>
-                <div style={{fontWeight:700,color:"#fca5a5",marginBottom:6}}>이상치(너무 좋은 결과) 교정</div>
-                모든 차원이 85+이거나 평균 80+ 이면 실제 검사에서 <span style={{color:"#f87171",fontWeight:700}}>"비현실적 응답 패턴"</span>으로 자동 플래그됩니다. 실제 사람은 강점과 약점이 공존합니다. 가장 자연스러운 프로파일은 2~3개 강점(65~80)과 2~3개 보통(40~60) 영역이 섞인 형태입니다.
+              {vc.extremeHigh.detected&&<div style={{marginBottom:12,padding:"12px 16px",background:"rgba(15,23,42,0.4)",borderRadius:10}}>
+                <div style={{fontWeight:700,color:"#c4b5fd",marginBottom:6}}>3. 자연스러운 강약 차이를 만드세요</div>
+                모든 차원에서 최고점을 받는 것보다 <span style={{fontWeight:700}}>자연스러운 강약 차이</span>가 있는 것이 오히려 좋은 평가를 받습니다. 2~3개 강점(보정 후 75~85)과 2~3개 보통(보정 후 55~65) 영역이 섞인 프로파일이 가장 설득력 있어요.
+              </div>}
+              {vc.outlier.avgHigh && !vc.extremeHigh.detected && <div style={{marginBottom:12,padding:"12px 16px",background:"rgba(15,23,42,0.4)",borderRadius:10}}>
+                <div style={{fontWeight:700,color:"#c4b5fd",marginBottom:6}}>4. 약점 인정으로 신뢰도를 높이세요</div>
+                전체 평균이 다소 높습니다. 덜 자신 있는 영역 1~2개만 솔직하게 응답해도 자연스러운 프로파일이 돼요.
               </div>}
               {vc.outlier.extremeLows.length>0&&<div style={{padding:"12px 16px",background:"rgba(15,23,42,0.4)",borderRadius:10}}>
-                <div style={{fontWeight:700,color:"#fdba74",marginBottom:6}}>극단적 저점(20 이하) 대처</div>
-                {vc.outlier.extremeLows.map(d=>DIM_LABELS[d]||d).join(", ")} 영역이 20점 이하로 극단적입니다. 이 수준은 일상 기능에 심각한 어려움이 있는 것으로 해석될 수 있습니다. 역문항을 반대로 읽었는지 점검하세요.
+                <div style={{fontWeight:700,color:"#c4b5fd",marginBottom:6}}>5. 역문항 읽는 법을 점검해보세요</div>
+                {vc.outlier.extremeLows.map(d=>DIM_LABELS[d]||d).join(", ")} 영역이 많이 낮게 나왔어요. 역문항("~하지 않는다"류)을 반대로 읽지 않았는지 확인하면 금방 개선됩니다.
               </div>}
             </div>
           </div>}
@@ -456,7 +547,7 @@ export default function App(){
             <div style={{fontSize:14,lineHeight:1.9,color:"#e2e8f0"}}>
               <div style={{marginBottom:12,padding:"12px 16px",background:"rgba(15,23,42,0.4)",borderRadius:10}}>
                 <div style={{fontWeight:700,color:"#c4b5fd",marginBottom:6}}>1. 역문항을 구분하세요</div>
-                "~하지 않는다", "~가 어렵다" 같은 부정적 표현이 들어간 문항이 역문항이에요. "계획을 세우고 실행한다"에 4점이면 "충동적으로 결정한다"에는 2점을 줘야 일관적이에요.
+                "~하지 않는다", "~가 어렵다" 같은 부정적 표현이 들어간 문항이 역문항이에요. "계획을 세우고 실행한다"에 4점이면 "충동적으로 결정한다"에는 2점을 주는 식으로 맞추면 일관성이 올라갑니다.
               </div>
               <div style={{marginBottom:12,padding:"12px 16px",background:"rgba(15,23,42,0.4)",borderRadius:10}}>
                 <div style={{fontWeight:700,color:"#c4b5fd",marginBottom:6}}>2. 역문항 예시</div>
@@ -471,12 +562,12 @@ export default function App(){
             <div style={{fontSize:14,lineHeight:1.9,color:"#e2e8f0"}}>
               <div style={{marginBottom:12,padding:"12px 16px",background:"rgba(15,23,42,0.4)",borderRadius:10}}>
                 <div style={{fontWeight:700,color:"#c4b5fd",marginBottom:6}}>이런 문항은 함정이에요</div>
-                <div>❌ "한 번도 거짓말을 한 적이 없다" → <span style={{color:"#f87171"}}>"매우 그렇다" 찍으면 과장 탐지</span></div>
-                <div>❌ "화가 난 적이 단 한 번도 없다" → <span style={{color:"#f87171"}}>비현실적 응답</span></div>
+                <div>❌ "한 번도 거짓말을 한 적이 없다" → <span style={{color:"#fdba74"}}>"매우 그렇다"로 답하면 과장으로 감점</span></div>
+                <div>❌ "화가 난 적이 단 한 번도 없다" → <span style={{color:"#fdba74"}}>비현실적 응답으로 분류</span></div>
               </div>
               <div style={{padding:"12px 16px",background:"rgba(15,23,42,0.4)",borderRadius:10}}>
-                <div style={{fontWeight:700,color:"#c4b5fd",marginBottom:6}}>적당한 약점 인정이 신뢰를 높여요</div>
-                과장 응답이 탐지되면 <span style={{color:"#f87171"}}>적성검사 점수와 무관하게 불합격</span> 처리됩니다.
+                <div style={{fontWeight:700,color:"#c4b5fd",marginBottom:6}}>적당한 약점 인정이 오히려 점수를 올려요</div>
+                약점 1~2개를 솔직하게 인정하는 응답을 넣으면 신뢰도가 크게 올라갑니다. "이 부분은 개선 중이에요" 정도의 뉘앙스로 답하면 충분히 통과할 수 있어요.
               </div>
             </div>
           </div>}
@@ -495,7 +586,7 @@ export default function App(){
           <div style={S.card}>
             <div style={S.secTtl}>📈 적합도</div>
             <div style={{fontSize:13,color:"#cbd5e0",marginBottom:14,padding:"10px 14px",background:"rgba(139,92,246,0.08)",borderRadius:10,border:"1px solid rgba(139,92,246,0.15)",lineHeight:1.7}}>💡 딥둥이 AI가 추론한 인재상과 비교한 <span style={{color:"#a78bfa",fontWeight:700}}>참고용 적합도</span>입니다.</div>
-            <div style={{textAlign:"center",marginBottom:16}}><div style={{fontSize:52,fontWeight:900,background:"linear-gradient(135deg,#60a5fa,#a78bfa)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{aiResults.matchScore}%</div></div>
+            <div style={{textAlign:"center",marginBottom:16}}><div style={{fontSize:52,fontWeight:900,background:"linear-gradient(135deg,#60a5fa,#a78bfa)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{adjustCompanyScore(aiResults.matchScore)}%</div></div>
             <p style={{fontSize:15,lineHeight:1.8,color:"#e2e8f0"}}>{aiResults.matchAnalysis}</p>
             {aiResults.strengths&&<div style={{marginTop:16}}><div style={{fontSize:15,fontWeight:700,color:"#6ee7b7",marginBottom:8}}>강점</div>{aiResults.strengths.map((s,i)=><div key={i} style={{fontSize:14,color:"#e2e8f0",marginBottom:5,paddingLeft:14}}>• {s}</div>)}</div>}
             {aiResults.improvements&&<div style={{marginTop:14}}><div style={{fontSize:15,fontWeight:700,color:"#fdba74",marginBottom:8}}>보완점</div>{aiResults.improvements.map((s,i)=><div key={i} style={{fontSize:14,color:"#e2e8f0",marginBottom:5,paddingLeft:14}}>• {s}</div>)}</div>}

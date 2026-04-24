@@ -1,4 +1,4 @@
-// ═══ BASE QUESTIONS (사기업 + 공통) — 200문항 + IF 3문항 = 203문항 ═══
+// ═══ BASE QUESTIONS (사기업 + 공통) — 200문항 + IF 4문항 = 204문항 ═══
 export const BASE_QUESTIONS = [
   // 개방성 (O) 23
   {id:1,dim:"O",text:"새로운 아이디어를 접하면 흥미가 생긴다.",rev:false},
@@ -211,10 +211,11 @@ export const BASE_QUESTIONS = [
   {id:188,dim:"CC",text:"한 가지에 오래 집중하는 것이 자연스럽다.",rev:false,pair:159},
   {id:189,dim:"CC",text:"팀을 이끄는 것이 자연스럽다.",rev:false,pair:111},
   {id:190,dim:"CC",text:"압박 속에서도 평소 실력을 발휘한다.",rev:false,pair:129},
-  // ═══ 비빈도 (IF - Infrequency) 3문항 — 정상인이면 거의 안 고르는 극단적 진술 ═══
-  {id:401,dim:"IF",text:"가끔 현실이 꿈인지 구분이 안 될 때가 있다.",rev:false},
-  {id:402,dim:"IF",text:"내 주변의 모든 사람들이 나를 감시하고 있다고 느낀 적이 있다.",rev:false},
-  {id:403,dim:"IF",text:"가끔 내가 다른 사람의 몸에 들어가 있는 것 같은 느낌이 든다.",rev:false},
+  // ═══ 비빈도 (IF - Infrequency) 4문항 — 어떤 차원도 측정하지 않는, 미묘한 비정상 진술 ═══
+  {id:401,dim:"IF",text:"타오르는 불꽃을 오래 바라보면 묘하게 빠져드는 기분이 든다.",rev:false},
+  {id:402,dim:"IF",text:"거울 앞에서 내 얼굴을 오래 보고 있으면 내 얼굴이 낯설게 느껴질 때가 있다.",rev:false},
+  {id:403,dim:"IF",text:"비가 쏟아지는 날 우산 없이 그냥 걸어보고 싶은 충동이 든다.",rev:false},
+  {id:404,dim:"IF",text:"조용한 공공장소에서 갑자기 큰 소리를 내보고 싶다는 생각이 든 적이 있다.",rev:false},
 ];
 
 // ═══ 공공기관 추가 문항 (40문항) ═══
@@ -270,8 +271,9 @@ export const NEGATIVE_DIMS=["AS","DT","AG","SV","PA"];
 export const NEG_LABELS={AS:"반사회성",DT:"대인불신",AG:"공격성",SV:"스트레스취약성",PA:"편집증"};
 
 // ═══ 비빈도(IF) 탐지 설정 ═══
-export const IF_IDS = [401, 402, 403];
-export const IF_THRESHOLD = 4; // 4 이상 선택 시 비정상 응답
+export const IF_IDS = [401, 402, 403, 404];
+export const IF_THRESHOLD = 4; // 4(그렇다) 이상 선택 시 비정상 응답
+export const IF_FLAG_MIN = 2;  // 2개 이상 동의 시 응답 신뢰도 감점
 
 export const PERSONALITY_TYPES = [
   {name:"전략적 혁신가",emoji:"🚀",condition:(s)=>s.O>=75&&s.L>=70&&s.C>=65,

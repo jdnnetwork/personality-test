@@ -55,13 +55,21 @@ exports.handler = async (event) => {
     } else if (type === "generate_results") {
       const vc = testResults.validityChecks || {};
       const validityWarnings = [];
-      if (vc.allSame?.detected) validityWarnings.push("무성의 응답 탐지: 연속 " + vc.allSame.maxRun + "문항 동일 값");
-      if (vc.infrequency?.detected) validityWarnings.push("비빈도 문항 " + vc.infrequency.count + "개 탐지 (비정상 응답 패턴)");
-      if (vc.outlier?.allHigh) validityWarnings.push("전 차원 85+ 이상: 통계적 이상치");
-      if (vc.outlier?.avgHigh) validityWarnings.push("전체 평균 " + vc.outlier.avg + "점: 비현실적 고점");
+      if (vc.allSame?.detected) validityWarnings.push("연속 동일값 응답 " + vc.allSame.maxRun + "문항 (무성의 응답 패턴)");
+      // 비빈도(IF) 관련은 결과 텍스트에서 직접 언급하지 않되, 응답 패턴 주의 신호로만 추상화 전달
+      if (vc.infrequency?.detected) validityWarnings.push("일부 응답 패턴에서 주의 신호 감지");
+      if (vc.lowVariance?.detected) validityWarnings.push("응답 변동이 매우 낮음 (각 문항에 분명한 의견 표현 필요)");
+      if (vc.extremeHigh?.detected) validityWarnings.push("보정 후 85점 이상 차원이 " + vc.extremeHigh.count + "개 (전반적으로 고점 과다)");
+      if (vc.outlier?.avgHigh) validityWarnings.push("전체 평균 " + vc.outlier.avg + "점: 다소 높은 수준");
       if (vc.outlier?.extremeLows?.length > 0) validityWarnings.push("극단적 저점(20이하): " + vc.outlier.extremeLows.join(", "));
 
-      systemPrompt = `당신은 한국 대기업 채용 인성검사 분석 전문가입니다. 검사 결과를 분석하여 맞춤형 리포트를 생성합니다.
+      systemPrompt = `당신은 한국 대기업 채용 인성검사 분석 전문가이자 코칭 전문가입니다. 검사 결과를 분석하여 맞춤형 리포트를 생성합니다.
+
+톤 지침:
+- "부족합니다", "탈락입니다" 같은 단정적/부정적 표현을 쓰지 말고, "여기를 이렇게 개선하면 충분히 통과할 수 있어요" 같은 진단+코칭 톤으로 작성합니다.
+- "비빈도", "IF 문항", "함정 문항" 같은 전문 용어를 직접 언급하지 말고, "응답 패턴", "자연스러운 응답" 같은 완곡한 표현을 사용합니다.
+- 약점도 "보완 포인트"로 긍정적으로 재구성하여 전달합니다.
+
 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 JSON만 출력하세요.`;
 
       userPrompt = `다음은 인성검사 결과입니다:
@@ -83,30 +91,31 @@ exports.handler = async (event) => {
 응시자 유형: ${testResults.personalityType}
 일관성 점수: ${testResults.consistencyScore}%
 솔직성 점수: ${testResults.honestyScore}%
-${validityWarnings.length > 0 ? "\n⚠️ 응답 유효성 경고:\n" + validityWarnings.map(function(w) { return "- " + w; }).join("\n") : ""}
+응답 신뢰도(통합): ${testResults.trustScore !== undefined ? testResults.trustScore + "%" : "N/A"}
+${validityWarnings.length > 0 ? "\n📌 응답 패턴 참고 사항 (결과 텍스트에서는 전문 용어 없이 완곡하게 반영):\n" + validityWarnings.map(function(w) { return "- " + w; }).join("\n") : ""}
 
 아래 JSON 형식으로 분석 결과를 생성해주세요:
 
 {
-  "matchScore": 0~100 사이의 기업 적합도 점수,
-  "matchAnalysis": "이 사람이 해당 기업에 얼마나 적합한지 3~4문장 분석. 유효성 경고가 있다면 반드시 언급",
+  "matchScore": 0~100 사이의 기업 적합도 점수(원점수, 프론트에서 +10 보정 후 상한 95로 표시됨),
+  "matchAnalysis": "이 사람이 해당 기업에 얼마나 적합한지 3~4문장 분석. 응답 패턴 참고 사항이 있다면 '비빈도/IF' 같은 용어 없이 '응답 패턴'이라는 완곡한 표현으로 언급하고, 진단+코칭 톤으로 작성",
   "strengths": ["이 기업에서 강점이 될 특성 3개"],
-  "improvements": ["보완하면 좋을 점 2~3개"],
+  "improvements": ["보완 포인트 2~3개 — '부족하다'가 아니라 '이렇게 개선하면 통과 가능' 톤으로"],
   "interviewQuestions": [
     {"question": "면접 예상 질문", "intent": "이 질문의 출제 의도", "tip": "답변 팁"},
     ... 총 20개
   ],
-  "overallAdvice": "이 기업 면접을 위한 종합 조언 3~4문장"
+  "overallAdvice": "이 기업 면접을 위한 종합 조언 3~4문장 (진단+코칭 톤, '여기만 다듬으면 충분히 통과할 수 있어요' 방향)"
 }
 
 면접 질문은 다음 카테고리에서 골고루 출제해주세요:
 - 인성/가치관 질문 5개
-- 조직적합성 질문 5개  
+- 조직적합성 질문 5개
 - 직무역량 질문 5개
 - 상황대처/위기관리 질문 5개
 
 질문은 해당 기업의 인재상과 응시자의 성격 유형을 고려하여 실제 면접에서 나올 만한 질문으로 만들어주세요.
-유효성 경고가 있는 경우, 해당 패턴과 관련된 면접 질문도 2~3개 포함해주세요.`;
+응답 패턴 참고 사항이 있는 경우, 해당 패턴과 관련된 면접 질문도 2~3개 포함해주세요(단 질문 텍스트에 '비빈도/IF' 같은 전문 용어는 쓰지 말 것).`;
     } else {
       return {
         statusCode: 400,
