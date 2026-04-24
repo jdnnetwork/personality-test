@@ -1,6 +1,49 @@
 // Vercel Serverless Function — Anthropic Claude 프록시
 // POST /api/analyze
 // env: ANTHROPIC_API_KEY
+
+// 약자 → 정식명칭 매핑 테이블 (대기업·사립/국립대학교·사립병원 커버)
+// Claude Sonnet 4가 약자 해석에 보수적이라 서버측에서 먼저 확장
+const ABBREV_MAP = {
+  // ── 대기업 ──
+  "현차": "현대자동차", "삼성": "삼성전자", "삼전": "삼성전자",
+  "LG": "LG전자", "엘지": "LG전자", "LGE": "LG전자",
+  "SKT": "SK텔레콤", "SKH": "SK하이닉스", "SK하이": "SK하이닉스",
+  "현대": "현대자동차", "기아": "기아",
+  "한전": "한국전력공사", "한수원": "한국수력원자력",
+  "LH": "한국토지주택공사", "코레일": "한국철도공사", "KTX": "한국철도공사",
+  "포스코": "POSCO", "POSCO": "POSCO",
+  "한화": "한화그룹", "롯데": "롯데그룹", "CJ": "CJ그룹",
+  "신세계": "신세계그룹", "두산": "두산그룹", "GS": "GS그룹",
+  "네이버": "네이버", "카카오": "카카오", "쿠팡": "쿠팡",
+  "배민": "우아한형제들", "당근": "당근마켓", "토스": "토스",
+  // ── 사립대학교 ──
+  "연대": "연세대학교", "고대": "고려대학교", "성대": "성균관대학교",
+  "한양대": "한양대학교", "이대": "이화여자대학교", "중대": "중앙대학교",
+  "경희대": "경희대학교", "외대": "한국외국어대학교", "서강대": "서강대학교",
+  "동국대": "동국대학교", "건국대": "건국대학교", "홍대": "홍익대학교",
+  "숙대": "숙명여자대학교", "숭실대": "숭실대학교", "세종대": "세종대학교",
+  "포스텍": "포항공과대학교", "포항공대": "포항공과대학교", "카이스트": "KAIST",
+  "KAIST": "KAIST", "UNIST": "UNIST", "지스트": "GIST", "GIST": "GIST",
+  // ── 국립대학교 ──
+  "서울대": "서울대학교", "부산대": "부산대학교", "경북대": "경북대학교",
+  "전남대": "전남대학교", "충남대": "충남대학교", "충북대": "충북대학교",
+  "전북대": "전북대학교", "강원대": "강원대학교", "제주대": "제주대학교",
+  "경상대": "경상국립대학교", "서울시립대": "서울시립대학교", "시립대": "서울시립대학교",
+  // ── 사립 병원 ──
+  "세브란스": "연세대학교 세브란스병원", "신촌세브란스": "연세대학교 세브란스병원",
+  "강남세브란스": "강남세브란스병원",
+  "삼성서울": "삼성서울병원", "삼성서울병원": "삼성서울병원",
+  "서울아산": "서울아산병원", "아산병원": "서울아산병원",
+  "서울성모": "가톨릭대학교 서울성모병원", "성모병원": "가톨릭대학교 서울성모병원",
+  "분당서울대": "분당서울대학교병원",
+};
+
+function resolveAbbreviation(raw) {
+  const name = (raw || "").trim();
+  return ABBREV_MAP[name] || name;
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -16,9 +59,7 @@ export default async function handler(req, res) {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
     const { type, companyName, testResults } = body;
 
-    // ── validate_company: AI 호출 없이 서버측 heuristic만 수행 ──
-    // Claude Sonnet이 한국 기업 이름을 과도하게 보수적으로 거부하는 문제가 있어 AI 검증을 폐기.
-    // 약자 해석(한전→한국전력공사 등)은 하단 analyze_company 프롬프트에서 처리.
+    // ── validate_company: AI 호출 없이 서버측 heuristic + 약자 매핑 ──
     if (type === "validate_company") {
       const name = (companyName || "").trim();
       if (name.length < 2) {
@@ -28,41 +69,40 @@ export default async function handler(req, res) {
           message: "해당 기업을 찾을 수 없습니다. 정확한 기업명을 입력해주세요.",
         });
       }
-      return res.status(200).json({ valid: true, correctedName: name, message: null });
+      const resolved = resolveAbbreviation(name);
+      const expanded = resolved !== name;
+      return res.status(200).json({
+        valid: true,
+        correctedName: resolved,
+        message: expanded ? `${resolved}(으)로 검색합니다` : null,
+      });
     }
 
     let systemPrompt, userPrompt;
 
     if (type === "analyze_company") {
-      systemPrompt = `당신은 한국 대기업 채용 전문가입니다. 사용자가 입력한 기업명을 분석하여 Big5 성격 프로파일로 변환합니다.
+      systemPrompt = `당신은 한국 조직의 채용·인재상 전문가입니다. 대기업·중견기업·스타트업·국립 및 사립 대학교·사립 병원 등 다양한 한국 조직을 다룹니다. 각 조직의 인재상과 핵심 가치를 분석하여 Big5 성격 프로파일로 변환합니다.
 
-⚠️ 절대 준수: 사용자가 입력한 기업만 분석하세요. 다른 회사를 임의로 생성하지 마세요.
+⚠️ 절대 준수: 사용자가 입력한 **그 조직만** 분석하세요. 다른 조직을 임의로 대체·생성하지 마세요.
 
-입력값 해석 규칙 (반드시 따를 것):
-- 입력이 정식 명칭이면 그대로 사용
-- 입력이 약칭·영문 표기면 가장 널리 쓰이는 정식 명칭으로 해석
-  · "현차"  → 현대자동차
-  · "한전"  → 한국전력공사
-  · "삼성"  → 삼성전자
-  · "SKT"   → SK텔레콤
-  · "SKH"   → SK하이닉스
-  · "LG"    → LG전자
-  · "LH"    → 한국토지주택공사
-  · "코레일" → 한국철도공사
-  · "네이버" → 네이버
-  · "카카오" → 카카오
-  · 그 외 약칭도 한국에서 상식적으로 통용되는 정식 명칭으로 해석
+입력값은 이미 서버측에서 약칭이 풀네임으로 확장된 상태로 전달됩니다. 그대로 사용해 분석하면 됩니다. (예: 사용자가 "연대"로 입력했으면 이미 "연세대학교"로 들어옵니다.)
+
+조직 유형별 분석 지침:
+- 대기업·중견·스타트업: 기업의 핵심 가치·조직문화 중심 분석
+- 사립대학교·국립대학교: 교직원 채용 관점의 교육 이념·학풍·인재상 분석
+- 사립병원: 의료진·행정직 채용 관점의 의료 철학·조직문화 분석
 
 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 JSON만 출력하세요.`;
 
-      userPrompt = `분석할 기업(입력값): "${companyName}"
+      const resolvedName = resolveAbbreviation(companyName);
+      userPrompt = `분석할 조직(입력값): "${resolvedName}"
 
-위 입력값에 해당하는 **실제 그 한국 기업**을 분석하세요. 입력이 약칭이면 위 시스템 규칙대로 정식 명칭으로 해석해서 그 회사를 분석하세요. 절대 다른 회사로 바꿔서 분석하지 마세요.
+위 입력값에 해당하는 **실제 그 한국 조직**(기업·대학·병원 등)을 분석하세요. 절대 다른 조직으로 바꿔 분석하지 마세요.
 
-이 기업의 인재상, 핵심가치, 조직문화를 기반으로 아래 JSON을 채워주세요:
+이 조직의 인재상, 핵심가치, 조직문화를 기반으로 아래 JSON을 채워주세요:
 
 {
-  "companyName": "해석한 정식 명칭",
+  "companyName": "${resolvedName}",
   "coreValues": "핵심가치 3~4개를 쉼표로 나열",
   "talentProfile": "이 기업이 원하는 인재상을 2~3문장으로 설명",
   "bigFiveProfile": {
