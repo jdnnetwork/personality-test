@@ -1,14 +1,12 @@
 // ═══ 확장 문항 풀 + 랜덤 선정 시스템 ═══
 // 9개 차원: 각 정 50 + 역 30 = 80문항 (총 720)
-// SD 15풀(5출제) · CC 20풀(9출제) · IF 8풀(4출제) · 공공 40(전원 출제)
+// SD 15풀(5출제) · CC 20풀(9출제) · IF 8풀(4출제)
 // 매 검사마다 seed 기반 랜덤 선정 + 전체 셔플
+// 출제: 본검사 182 + SD 5 + CC 9 + IF 4 = 200문항
 
 // ═══ 공통 메타 ═══
-export const DIM_LABELS = {O:"개방성",C:"성실성",E:"외향성",A:"친화성",N:"정서안정성",L:"리더십",S:"스트레스 대처",I:"자주성",F:"집중력",ET:"윤리성"};
+export const DIM_LABELS = {O:"개방성",C:"성실성",E:"외향성",A:"친화성",N:"정서안정성",L:"리더십",S:"스트레스 대처",I:"자주성",F:"집중력"};
 export const DIMS_ORDER = ["O","C","E","A","N","L","S","I","F"];
-export const PUBLIC_DIMS = ["ET"];
-export const NEGATIVE_DIMS = ["AS","DT","AG","SV","PA"];
-export const NEG_LABELS = {AS:"반사회성",DT:"대인불신",AG:"공격성",SV:"스트레스취약성",PA:"편집증"};
 export const IF_THRESHOLD = 4;
 export const IF_FLAG_MIN = 2;
 
@@ -876,62 +874,6 @@ const IF_POOL = w("IF", [
 ]);
 
 // ══════════════════════════════════════
-// 공공기관 추가 차원 (변경 없음)
-// ══════════════════════════════════════
-const ET_POOL = w("ET", [
-  {id:301,text:"규정이 불합리하더라도 정해진 절차를 따르는 것이 옳다고 생각한다.",rev:false},
-  {id:302,text:"업무상 알게 된 정보를 사적으로 이용한 적이 있다.",rev:true},
-  {id:303,text:"작은 편법이라도 용납해서는 안 된다고 생각한다.",rev:false},
-  {id:304,text:"공과 사를 명확히 구분하는 편이다.",rev:false},
-  {id:305,text:"부당한 지시를 받으면 거절할 수 있다.",rev:false},
-  {id:306,text:"결과가 좋으면 과정에서의 편법은 괜찮다고 생각한다.",rev:true},
-  {id:307,text:"투명하게 일을 처리하는 것이 가장 중요하다.",rev:false},
-  {id:308,text:"조직의 비리를 발견하면 신고할 의지가 있다.",rev:false},
-  {id:309,text:"금전적 유혹에 흔들리지 않을 자신이 있다.",rev:false},
-  {id:310,text:"주변 사람들이 하니까 나도 따라 한 적이 있다.",rev:true},
-  {id:311,text:"공공의 이익이 개인의 이익보다 우선이다.",rev:false},
-  {id:312,text:"청렴한 조직문화를 만드는 데 기여하고 싶다.",rev:false},
-  {id:313,text:"접대나 선물을 받는 것에 거부감이 없다.",rev:true},
-  {id:314,text:"양심에 따라 행동하는 것이 조직 논리보다 중요하다.",rev:false},
-  {id:315,text:"규정을 어기더라도 상사의 지시를 따라야 한다.",rev:true},
-]);
-const AS_POOL = w("AS", [
-  {id:316,text:"규칙은 어기기 위해 존재한다고 생각할 때가 있다.",rev:false},
-  {id:317,text:"다른 사람이 손해를 봐도 나와 상관없다고 느낀다.",rev:false},
-  {id:318,text:"법적으로 문제가 없으면 도덕적으로도 괜찮다고 생각한다.",rev:false},
-  {id:319,text:"약속을 지키지 않아도 큰 문제가 안 된다고 생각한다.",rev:false},
-  {id:320,text:"남에게 피해를 주더라도 내 목표 달성이 우선이다.",rev:false},
-]);
-const DT_POOL = w("DT", [
-  {id:321,text:"대부분의 사람들은 속마음이 다르다고 생각한다.",rev:false},
-  {id:322,text:"누군가 친절하면 뭔가 의도가 있을 것이라고 느낀다.",rev:false},
-  {id:323,text:"사람들을 쉽게 믿지 못한다.",rev:false},
-  {id:324,text:"동료의 조언도 일단 의심하고 본다.",rev:false},
-  {id:325,text:"사람들은 기회가 되면 나를 이용할 것이라고 생각한다.",rev:false},
-]);
-const AG_POOL = w("AG", [
-  {id:326,text:"화가 나면 참기 어렵다.",rev:false},
-  {id:327,text:"부당한 일을 당하면 즉시 따진다.",rev:false},
-  {id:328,text:"논쟁에서 지면 기분이 매우 나쁘다.",rev:false},
-  {id:329,text:"다른 사람의 실수에 쉽게 짜증이 난다.",rev:false},
-  {id:330,text:"가끔 물건을 던지거나 부수고 싶은 충동을 느낀다.",rev:false},
-]);
-const SV_POOL = w("SV", [
-  {id:331,text:"작은 변화에도 크게 동요하는 편이다.",rev:false},
-  {id:332,text:"업무 스트레스로 잠을 못 잔 적이 자주 있다.",rev:false},
-  {id:333,text:"예상치 못한 상황이 오면 아무것도 할 수 없다고 느낀다.",rev:false},
-  {id:334,text:"스트레스를 받으면 몸에 증상이 나타난다.",rev:false},
-  {id:335,text:"힘든 일이 겹치면 모든 것을 포기하고 싶어진다.",rev:false},
-]);
-const PA_POOL = w("PA", [
-  {id:336,text:"사람들이 내 뒤에서 나를 험담한다고 느낀 적이 있다.",rev:false},
-  {id:337,text:"나만 불공정한 대우를 받는다고 느낄 때가 있다.",rev:false},
-  {id:338,text:"다른 사람의 성공이 나를 의도적으로 무시하려는 것 같다.",rev:false},
-  {id:339,text:"사람들이 나를 일부러 배제한다고 느낀다.",rev:false},
-  {id:340,text:"나에 대한 평가가 불공정하다고 자주 느낀다.",rev:false},
-]);
-
-// ══════════════════════════════════════
 // 풀 매핑 + 하위 호환 export
 // ══════════════════════════════════════
 const DIM_POOLS = { O:O_POOL, C:C_POOL, E:E_POOL, A:A_POOL, N:N_POOL, L:L_POOL, S:S_POOL, I:I_POOL, F:F_POOL };
@@ -941,7 +883,6 @@ export const BASE_QUESTIONS = [
   ...O_POOL, ...C_POOL, ...E_POOL, ...A_POOL, ...N_POOL, ...L_POOL, ...S_POOL, ...I_POOL, ...F_POOL,
   ...SD_POOL, ...CC_POOL, ...IF_POOL,
 ];
-export const PUBLIC_QUESTIONS = [...ET_POOL, ...AS_POOL, ...DT_POOL, ...AG_POOL, ...SV_POOL, ...PA_POOL];
 // 하위 호환: CC 전체 쌍 맵 (실제 검사에서는 selectQuestions의 ccPairs 사용)
 export const CC_PAIRS = CC_POOL.map(c => [c.id, c.pair]);
 // 하위 호환: IF 전체 ID 목록
@@ -978,15 +919,15 @@ function pickN(arr, n, rand) {
 
 // ══════════════════════════════════════
 // selectQuestions — 매 검사 세션마다 호출
+// 구성: 본검사 182 + SD 5 + CC 9 + IF 4 = 200
 // 반환: { questions, ccPairs, ifIds, revPairs }
 // ══════════════════════════════════════
-export function selectQuestions(seed, mode) {
+export function selectQuestions(seed) {
   const rand = mulberry32(seed || Math.floor(Math.random() * 2147483647));
   const selected = [];
 
-  // 1) 9차원 × 22~25 = 총 200 분배 (정:역 = 7:3)
-  const counts = new Array(DIMS_ORDER.length).fill(22);
-  // 9차원 중 2개를 +1, 합 200 맞춤
+  // 1) 9차원 × 20 + 2개 차원 +1 = 182 (정:역 = 7:3)
+  const counts = new Array(DIMS_ORDER.length).fill(20);
   const extraIdx = pickN(DIMS_ORDER.map((_, i) => i), 2, rand);
   extraIdx.forEach(i => counts[i] += 1);
 
@@ -1034,12 +975,7 @@ export function selectQuestions(seed, mode) {
   selected.push(...ifSelected);
   const ifIds = ifSelected.map(q => q.id);
 
-  // 5) 공공기관 모드: 공공 차원 40문항 전원 추가
-  if (mode === "public") {
-    selected.push(...ET_POOL, ...AS_POOL, ...DT_POOL, ...AG_POOL, ...SV_POOL, ...PA_POOL);
-  }
-
-  // 6) revPairs — 선정된 문항 중 차원별 정/역 쌍을 동적으로 구성 (차원당 최대 2쌍)
+  // 5) revPairs — 선정된 문항 중 차원별 정/역 쌍을 동적으로 구성 (차원당 최대 2쌍)
   const revPairs = [];
   DIMS_ORDER.forEach(d => {
     const pos = selected.filter(q => q.dim === d && !q.rev).map(q => q.id);
@@ -1050,7 +986,7 @@ export function selectQuestions(seed, mode) {
     for (let i = 0; i < n; i++) revPairs.push([posSh[i], revSh[i]]);
   });
 
-  // 7) 전체 순서 뒤섞기
+  // 6) 전체 순서 뒤섞기
   const questions = shuffleArray(selected, rand);
 
   return { questions, ccPairs, ifIds, revPairs };

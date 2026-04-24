@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { selectQuestions, DIM_LABELS, DIMS_ORDER, PUBLIC_DIMS, NEGATIVE_DIMS, NEG_LABELS, PERSONALITY_TYPES, IF_THRESHOLD, IF_FLAG_MIN } from "./questions.js";
+import { selectQuestions, DIM_LABELS, DIMS_ORDER, PERSONALITY_TYPES, IF_THRESHOLD, IF_FLAG_MIN } from "./questions.js";
 
-function shuffleWithSeed(arr,seed=42){const a=[...arr];let s=seed;for(let i=a.length-1;i>0;i--){s=(s*16807)%2147483647;const j=s%(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
 const PER_PAGE=10;
 
 // ═══ Animated Radar ═══
@@ -116,7 +115,6 @@ function computeTrustScore(conP, sdP, vc) {
 
 export default function App(){
   const[stage,setStage]=useState("intro");
-  const[mode,setMode]=useState(null);
   const[companyName,setCompanyName]=useState("");
   const[companyData,setCompanyData]=useState(null);
   const[page,setPage]=useState(1);
@@ -135,7 +133,7 @@ export default function App(){
   // 매 검사 세션 시작마다 새 시드로 문항 선정
   function startNewSession() {
     const seed = Math.floor(Math.random() * 2147483647);
-    const set = selectQuestions(seed, mode);
+    const set = selectQuestions(seed);
     setTestSet({ ...set, seed });
     setPage(1);
     setAnswers({});
@@ -158,14 +156,12 @@ export default function App(){
     const ccPairs = testSet?.ccPairs || [];
     const revPairs = testSet?.revPairs || [];
     const ifIds = testSet?.ifIds || [];
-    const allDims=[...DIMS_ORDER,...(mode==="public"?[...PUBLIC_DIMS,...NEGATIVE_DIMS]:[])];
-    const ds={};allDims.forEach(d=>{ds[d]=[];});
+    const ds={};DIMS_ORDER.forEach(d=>{ds[d]=[];});
     questions.forEach(q=>{
       if(q.dim==="CC"||q.dim==="SD"||q.dim==="IF")return;
       const a=answers[q.id];if(a===undefined)return;
       if(!ds[q.dim])ds[q.dim]=[];
-      if(NEGATIVE_DIMS.includes(q.dim)){ds[q.dim].push(a);}
-      else{ds[q.dim].push(q.rev?(6-a):a);}
+      ds[q.dim].push(q.rev?(6-a):a);
     });
     const sc={};
     Object.keys(ds).forEach(d=>{const arr=ds[d];sc[d]=arr.length?Math.round((arr.reduce((a,b)=>a+b,0)/arr.length-1)/4*100):50;});
@@ -181,8 +177,8 @@ export default function App(){
     let conP=50;const allD=[...ccDiffs,...dimDiffs];
     if(allD.length>0){conP=Math.max(0,Math.round((1-allD.reduce((a,b)=>a+b,0)/allD.length/4)*100));}
 
-    // ═══ 보정 점수 (일반 차원만; 부적격 요인은 원점수 유지) ═══
-    const posDims = [...DIMS_ORDER, ...(mode==="public"?PUBLIC_DIMS:[])];
+    // ═══ 보정 점수 (9차원 전체) ═══
+    const posDims = [...DIMS_ORDER];
     const adjScores = {...sc};
     posDims.forEach(d => { adjScores[d] = adjustScore(sc[d] || 0); });
 
@@ -252,44 +248,23 @@ export default function App(){
   if(stage==="intro") return(
     <div style={S.wrap}><div style={S.box}>
       <div style={{height:32}}/>
-      <DeepHeader subtitle={"Big5+자주성+집중력 기반 AI 맞춤 분석\n사기업 / 공공기관 모드 선택 가능"}/>
-      <div style={{...S.card,padding:20}}>
-        <div style={{fontSize:16,fontWeight:700,marginBottom:16,color:"#f1f5f9"}}>검사 유형을 선택하세요</div>
-        <div style={{display:"flex",gap:12,marginBottom:16}}>
-          <div style={S.modeBtn(mode==="private")} onClick={()=>setMode("private")}>
-            <div style={{fontSize:28,marginBottom:8}}>🏢</div>
-            <div style={{fontSize:16,fontWeight:700,color:mode==="private"?"#60a5fa":"#cbd5e0"}}>사기업</div>
-            <div style={{fontSize:13,color:"#94a3b8",marginTop:4}}>218문항 · 약 25분</div>
-            <div style={{fontSize:11,color:"#64748b",marginTop:6}}>삼성, SK, 현대, LG, CJ 등</div>
-          </div>
-          <div style={S.modeBtn(mode==="public")} onClick={()=>setMode("public")}>
-            <div style={{fontSize:28,marginBottom:8}}>🏛️</div>
-            <div style={{fontSize:16,fontWeight:700,color:mode==="public"?"#60a5fa":"#cbd5e0"}}>공공기관</div>
-            <div style={{fontSize:13,color:"#94a3b8",marginTop:4}}>258문항 · 약 30분</div>
-            <div style={{fontSize:11,color:"#64748b",marginTop:6}}>공기업, 준정부, 공공기관</div>
-          </div>
-        </div>
-        {mode==="public"&&<div style={{fontSize:13,color:"#a78bfa",padding:"10px 14px",background:"rgba(139,92,246,0.08)",borderRadius:10,border:"1px solid rgba(139,92,246,0.15)",lineHeight:1.7}}>
-          공공기관 모드에는 <span style={{fontWeight:700}}>윤리성</span> 차원 + <span style={{fontWeight:700}}>부적격 요인</span>(반사회성, 대인불신, 공격성, 스트레스취약성, 편집증) 탐지 문항이 추가됩니다.
-        </div>}
-      </div>
+      <DeepHeader subtitle={"Big5 + 자주성 + 집중력 기반 AI 맞춤 분석\n사기업 인성검사 대비 200문항"}/>
       <div style={{...S.card,padding:20}}>
         <div style={{fontSize:15,fontWeight:700,marginBottom:12,color:"#f1f5f9"}}>측정 차원</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
           {DIMS_ORDER.map(d=><span key={d} style={S.tag}>{DIM_LABELS[d]}</span>)}
-          {mode==="public"&&<><span style={{...S.tag,background:"rgba(139,92,246,0.15)",color:"#c4b5fd"}}>윤리성</span><span style={{...S.tag,background:"rgba(248,113,113,0.1)",color:"#fca5a5"}}>부적격 요인 탐지</span></>}
         </div>
         <div style={{fontSize:13,color:"#a78bfa",padding:"10px 14px",background:"rgba(139,92,246,0.08)",borderRadius:10,border:"1px solid rgba(139,92,246,0.15)",lineHeight:1.7,marginBottom:12}}>
           🔍 <span style={{fontWeight:700}}>탐지 시스템</span>: 응답 신뢰도 통합 지표 · 매 검사 랜덤 출제(풀 720+) · 사회적 바람직성(SD) · 일관성 검증(CC) · 차원 내 정역 쌍 · <span style={{color:"#f87171",fontWeight:700}}>비빈도(IF)</span> · <span style={{color:"#f87171",fontWeight:700}}>올-세임/로우-배리언스 탐지</span> · <span style={{color:"#f87171",fontWeight:700}}>극단값 패턴 탐지</span>
         </div>
         <div style={{fontSize:15,lineHeight:2.2,color:"#cbd5e0"}}>
-          <span style={{color:"#60a5fa",fontWeight:700}}>STEP 1</span> 지원 기업/기관명 입력 (선택)<br/>
-          <span style={{color:"#a78bfa",fontWeight:700}}>STEP 2</span> {mode==="public"?"258":"218"}문항 인성검사<br/>
+          <span style={{color:"#60a5fa",fontWeight:700}}>STEP 1</span> 지원 기업명 입력 (선택)<br/>
+          <span style={{color:"#a78bfa",fontWeight:700}}>STEP 2</span> 200문항 인성검사 (약 25분)<br/>
           <span style={{color:"#c084fc",fontWeight:700}}>STEP 3</span> AI 맞춤 결과 + TIP 제공
         </div>
       </div>
-      <button style={mode?{...S.btn(true),display:"block",width:"100%",padding:"18px",fontSize:18,fontWeight:800,boxShadow:"0 6px 24px rgba(99,102,241,0.3)"}:{...S.btnOff,display:"block",width:"100%",padding:"18px",fontSize:18}} disabled={!mode} onClick={()=>setStage("company_input")}>
-        {mode?"다음으로":"유형을 선택하세요"}
+      <button style={{...S.btn(true),display:"block",width:"100%",padding:"18px",fontSize:18,fontWeight:800,boxShadow:"0 6px 24px rgba(99,102,241,0.3)"}} onClick={()=>setStage("company_input")}>
+        검사 시작하기
       </button>
       <div style={{textAlign:"center",marginTop:16,fontSize:12,color:"#64748b"}}>Powered by 457deep · 딥둥이</div>
       <div style={{height:32}}/>
@@ -300,11 +275,11 @@ export default function App(){
   if(stage==="company_input") return(
     <div style={S.wrap}><div style={S.box}>
       <div style={{height:32}}/>
-      <DeepHeader subtitle={`${mode==="public"?"공공기관":"사기업"} 모드 · ${mode==="public"?"258":"218"}문항`}/>
+      <DeepHeader subtitle={"사기업 인성검사 · 200문항 · 약 25분"}/>
       <div style={S.card}>
-        <div style={{fontSize:16,fontWeight:700,marginBottom:14,color:"#f1f5f9"}}>지원 {mode==="public"?"기관":"기업"} (선택)</div>
+        <div style={{fontSize:16,fontWeight:700,marginBottom:14,color:"#f1f5f9"}}>지원 기업 (선택)</div>
         <div style={{marginBottom:16}}>
-          <input style={S.input} placeholder={mode==="public"?"기관명 입력 (예: 한국전력공사)":"기업명 입력 (예: 삼성전자)"} value={companyName} onChange={e=>setCompanyName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){if(companyName.trim())analyzeCompanyInBackground();startNewSession();}}}/>
+          <input style={S.input} placeholder="기업명 입력 (예: 삼성전자)" value={companyName} onChange={e=>setCompanyName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){if(companyName.trim())analyzeCompanyInBackground();startNewSession();}}}/>
         </div>
         <button style={{...S.btn(true),width:"100%"}} onClick={()=>{if(companyName.trim())analyzeCompanyInBackground();startNewSession();}}>검사 시작하기</button>
         <div style={{textAlign:"center",marginTop:12,fontSize:13,color:"#94a3b8"}}>입력하지 않아도 검사는 진행됩니다</div>
@@ -318,7 +293,7 @@ export default function App(){
   if(stage==="result"&&basicResults){
     const{scores:sc,adjustedScores:adj,sdPct:sdP,consistencyPct:conP,trustScore:trust,personalityType:pType,validityChecks:vc}=basicResults;
     const mins=endTime&&startTime?Math.round((endTime-startTime)/60000):"–";
-    const radarDims=mode==="public"?[...DIMS_ORDER,...PUBLIC_DIMS]:DIMS_ORDER;
+    const radarDims=DIMS_ORDER;
     const radarLabels={...DIM_LABELS};
     const getPercentile=(s)=>s>=90?"상위 5%":s>=80?"상위 10%":s>=70?"상위 20%":s>=60?"상위 35%":s>=50?"평균":s>=40?"하위 35%":s>=30?"하위 20%":"하위 10%";
     const getPctColor=(s)=>s>=70?"#6ee7b7":s>=50?"#fbbf24":"#f87171";
@@ -345,7 +320,7 @@ export default function App(){
     return(
       <div style={S.wrap}><div style={S.box}>
         <div style={{height:16}}/>
-        <DeepHeader subtitle={`${mode==="public"?"공공기관":"사기업"} 모드 · 소요: ${mins}분 · ${total}/${TOTAL_Q}문항`}/>
+        <DeepHeader subtitle={`사기업 인성검사 · 소요: ${mins}분 · ${total}/${TOTAL_Q}문항`}/>
 
         {/* ═══ 응답 패턴 점검 카드 (최상단) — 진단+코칭 톤 ═══ */}
         {hasAnyWarning && <div style={{...S.alertCard("251,146,60"),border:"2px solid rgba(251,146,60,0.45)",background:"rgba(251,146,60,0.06)"}}>
@@ -471,28 +446,6 @@ export default function App(){
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}><span style={{fontSize:22}}>⚠️</span><span style={{fontSize:19,fontWeight:800,color:"#fdba74"}}>{pType.name} 유형이 주의할 점</span></div>
           {pType.warnings.map((w,i)=>(<div key={i} style={S.tipItem}><span style={{position:"absolute",left:0,color:"#fdba74",fontWeight:700,fontSize:16}}>!</span>{w}</div>))}
         </div>
-
-        {/* 공공기관: 부적격 요인 */}
-        {mode==="public"&&<div style={{...S.card,border:"1px solid rgba(248,113,113,0.25)"}}>
-          <div style={S.secTtl}>🚨 공공기관 부적격 인성요인 탐지</div>
-          <div style={{fontSize:13,color:"#cbd5e0",marginBottom:16,padding:"10px 14px",background:"rgba(248,113,113,0.06)",borderRadius:10,lineHeight:1.7}}>
-            아래 항목이 높을수록 공공기관 인성검사에서 부적격 판정 위험이 높아집니다. 60점 이상이면 주의가 필요합니다.
-          </div>
-          {NEGATIVE_DIMS.map(d=>{
-            const v=sc[d]||0;
-            const danger=v>=60;
-            const warn=v>=40&&v<60;
-            return(<div key={d} style={{marginBottom:14}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                <span style={{fontSize:15,fontWeight:700,color:danger?"#f87171":warn?"#fdba74":"#6ee7b7"}}>{NEG_LABELS[d]}</span>
-                <span style={{fontSize:16,fontWeight:800,color:danger?"#f87171":warn?"#fdba74":"#6ee7b7"}}>{v}점</span>
-              </div>
-              <div style={S.barBg}><div style={S.barFill(v,danger?"#f87171":warn?"#fdba74":"#6ee7b7")}/></div>
-              {danger&&<div style={{fontSize:13,color:"#f87171",marginTop:4}}>⚠️ 위험 수준 — 실제 검사에서 부적격 판정 가능성이 높습니다. 관련 문항 응답을 점검하세요.</div>}
-              {warn&&<div style={{fontSize:13,color:"#fdba74",marginTop:4}}>주의 — 경계선 수준입니다. 면접에서 관련 질문이 나올 수 있습니다.</div>}
-            </div>);
-          })}
-        </div>}
 
         {/* 응답 신뢰도 상세 해석 (일관성+솔직성을 풀어서 설명) */}
         <div style={S.card}>
@@ -624,7 +577,7 @@ export default function App(){
       <div style={{position:"sticky",top:0,zIndex:10,background:"rgba(12,18,34,0.97)",backdropFilter:"blur(10px)",padding:"12px 0 8px"}}>
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
           <img src="/deepdungi.png" alt="" style={{width:30,height:30,borderRadius:"50%",objectFit:"cover"}}/>
-          <span style={{fontSize:13,fontWeight:700,color:"#cbd5e0"}}>딥둥이 {mode==="public"?"공공기관":"사기업"} 인성검사</span>
+          <span style={{fontSize:13,fontWeight:700,color:"#cbd5e0"}}>딥둥이 사기업 인성검사</span>
           {companyName&&<span style={{fontSize:12,color:"#94a3b8",marginLeft:"auto"}}>{companyName}</span>}
         </div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
