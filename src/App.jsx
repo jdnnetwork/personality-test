@@ -29,7 +29,7 @@ function AnimatedRadar({scores,dims,labels,companyProfile,size=360}){
     </svg>);
 }
 
-function Spinner({text}){return(<div style={{textAlign:"center",padding:40}}><div style={{width:44,height:44,border:"3px solid rgba(96,165,250,0.2)",borderTop:"3px solid #60a5fa",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 16px"}}/><div style={{color:"#e2e8f0",fontSize:16,fontWeight:600}}>{text}</div><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style></div>);}
+function Spinner({text}){return(<div style={{textAlign:"center",padding:40}}><div style={{width:44,height:44,border:"3px solid rgba(96,165,250,0.2)",borderTop:"3px solid #60a5fa",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 16px"}}/><div style={{color:"#e2e8f0",fontSize:16,fontWeight:600,whiteSpace:"pre-line",lineHeight:1.6}}>{text}</div><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style></div>);}
 
 function DeepHeader({subtitle}){return(<div style={{textAlign:"center",marginBottom:24}}><img src="/deepdungi.png" alt="딥둥이" style={{width:100,height:100,borderRadius:"50%",objectFit:"cover",marginBottom:12,border:"3px solid rgba(96,165,250,0.3)"}}/><div style={{fontSize:12,letterSpacing:6,color:"#94a3b8",textTransform:"uppercase",marginBottom:4,fontWeight:700}}>457deep</div><h1 style={{fontSize:26,fontWeight:900,background:"linear-gradient(135deg,#60a5fa,#a78bfa)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",lineHeight:1.3,marginBottom:8}}>딥둥이 모의 인성검사</h1>{subtitle&&<p style={{color:"#cbd5e0",fontSize:14,lineHeight:1.6,whiteSpace:"pre-line"}}>{subtitle}</p>}</div>);}
 
@@ -273,7 +273,7 @@ export default function App(){
     );
   }
 
-  if(stage==="test_loading") return(<div style={S.wrap}><div style={S.box}><div style={{height:60}}/><DeepHeader/><Spinner text="딥둥이가 맞춤 결과 리포트를 만들고 있어요..."/></div></div>);
+  if(stage==="test_loading") return(<div style={S.wrap}><div style={S.box}><div style={{height:60}}/><DeepHeader/><Spinner text={"딥둥이가 맞춤 결과 리포트를 만들고 있어요\n최대 2-3분까지 소요될 수 있어요"}/></div></div>);
 
   // ═══ RESULT ═══
   if(stage==="result"&&basicResults){
@@ -564,7 +564,8 @@ export default function App(){
             {aiResults.overallAdvice&&<div style={{marginTop:16,padding:"14px 16px",background:"rgba(99,102,241,0.08)",borderRadius:12,border:"1px solid rgba(99,102,241,0.2)"}}><div style={{fontSize:14,fontWeight:700,color:"#a78bfa",marginBottom:6}}>종합 조언</div><div style={{fontSize:14,lineHeight:1.8,color:"#e2e8f0"}}>{aiResults.overallAdvice}</div></div>}
           </div>
           {aiResults.interviewQuestions&&<div style={S.card}>
-            <div style={S.secTtl}>🎤 AI 맞춤 면접 예상 질문 ({aiResults.interviewQuestions.length}개)</div>
+            <div style={S.secTtl}>🎤 나의 인성검사 결과 기반 면접 예상 질문</div>
+            <div style={{fontSize:13,color:"#cbd5e0",marginBottom:14,padding:"10px 14px",background:"rgba(139,92,246,0.08)",borderRadius:10,border:"1px solid rgba(139,92,246,0.15)",lineHeight:1.7}}>인성검사 결과에서 보완이 필요한 영역 중심으로 출제된 질문입니다.</div>
             {aiResults.interviewQuestions.map((item,i)=>(<div key={i} style={{...S.iq,marginBottom:14}}><div style={{marginBottom:8}}><span style={{color:"#7c3aed",fontWeight:700,marginRight:8}}>Q{i+1}.</span><span style={{color:"#f1f5f9",fontWeight:600}}>{item.question}</span></div>{item.intent&&<div style={{fontSize:13,color:"#94a3b8",marginBottom:4,paddingLeft:30}}><span style={{color:"#cbd5e0",fontWeight:600}}>출제 의도:</span> {item.intent}</div>}{item.tip&&<div style={{fontSize:13,color:"#94a3b8",paddingLeft:30}}><span style={{color:"#6ee7b7",fontWeight:600}}>답변 팁:</span> {item.tip}</div>}</div>))}
           </div>}
         </>}
