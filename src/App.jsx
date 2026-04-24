@@ -99,18 +99,37 @@ function adjustCompanyScore(raw) {
   return Math.min(95, Math.max(0, Math.round(raw + 10)));
 }
 
-function computeTrustScore(conP, sdP, vc) {
-  const honesty = 100 - sdP;
-  let raw = conP * 0.6 + honesty * 0.4;
+function buildScore(raw, penalty) {
+  const adjRaw = Math.max(0, Math.round(raw - penalty));
+  const display = Math.max(35, adjRaw); // 하한 35
+  const level = adjRaw >= 80 ? "매우 높음" : adjRaw >= 65 ? "양호" : adjRaw >= 50 ? "보통" : adjRaw >= 40 ? "주의" : "경고";
+  return { raw: adjRaw, display, penalty, level };
+}
+
+// 응답 안정성 — 일관성 기반 + 올-세임/로우-배리언스 감점
+function computeStabilityScore(conP, vc) {
   let penalty = 0;
   if (vc.allSame?.detected) penalty += 20;
-  if (vc.infrequency?.detected) penalty += 15;
   if (vc.lowVariance?.detected) penalty += 15;
+  return buildScore(conP, penalty);
+}
+
+// 응답 진정성 — 솔직성 기반 + 비빈도/극단값 감점
+function computeAuthenticityScore(sdP, vc) {
+  const honesty = 100 - sdP;
+  let penalty = 0;
+  if (vc.infrequency?.detected) penalty += 15;
   if (vc.extremeHigh?.detected) penalty += 10;
-  raw = Math.max(0, Math.round(raw - penalty));
-  const display = Math.max(35, raw); // 하한 35 (원점수 40 미만이면 35로 끌어올림)
-  const level = raw >= 80 ? "매우 높음" : raw >= 65 ? "양호" : raw >= 50 ? "보통" : raw >= 40 ? "주의" : "경고";
-  return { raw, display, penalty, level };
+  return buildScore(honesty, penalty);
+}
+
+// 차원 점수 → 등급 변환
+function getGrade(score) {
+  if (score > 65) return { grade: "S", color: "#10b981", bg: "rgba(16,185,129,0.18)" };
+  if (score > 55) return { grade: "A", color: "#3b82f6", bg: "rgba(59,130,246,0.18)" };
+  if (score > 40) return { grade: "B", color: "#f97316", bg: "rgba(249,115,22,0.18)" };
+  if (score > 30) return { grade: "C", color: "#ef4444", bg: "rgba(239,68,68,0.18)" };
+  return { grade: "D", color: "#991b1b", bg: "rgba(153,27,27,0.25)" };
 }
 
 export default function App(){
@@ -190,10 +209,11 @@ export default function App(){
     const extremeHigh = detectExtremeHigh(adjScores, posDims);
 
     const vc = { allSame, infrequency: ifResult, outlier, lowVariance, extremeHigh };
-    const trust = computeTrustScore(conP, sdP, vc);
+    const stability = computeStabilityScore(conP, vc);
+    const authenticity = computeAuthenticityScore(sdP, vc);
 
     const pType=PERSONALITY_TYPES.find(t=>t.condition(sc))||PERSONALITY_TYPES[7];
-    return{scores:sc, adjustedScores:adjScores, sdPct:sdP, consistencyPct:conP, trustScore:trust, personalityType:pType,
+    return{scores:sc, adjustedScores:adjScores, sdPct:sdP, consistencyPct:conP, stabilityScore:stability, authenticityScore:authenticity, personalityType:pType,
       validityChecks: vc
     };
   }
@@ -205,7 +225,7 @@ export default function App(){
 
   async function generateAiResults(basic){
     setStage("test_loading");setAiError("");
-    try{const res=await fetch("/.netlify/functions/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"generate_results",testResults:{companyName:companyData?.companyName||companyName||"일반",companyProfile:companyData?.bigFiveProfile||null,scores:basic.scores,adjustedScores:basic.adjustedScores,personalityType:basic.personalityType.name,consistencyScore:basic.consistencyPct,honestyScore:100-basic.sdPct,trustScore:basic.trustScore?.display,validityChecks:basic.validityChecks}})});
+    try{const res=await fetch("/.netlify/functions/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"generate_results",testResults:{companyName:companyData?.companyName||companyName||"일반",companyProfile:companyData?.bigFiveProfile||null,scores:basic.scores,adjustedScores:basic.adjustedScores,personalityType:basic.personalityType.name,consistencyScore:basic.consistencyPct,honestyScore:100-basic.sdPct,stabilityScore:basic.stabilityScore?.display,authenticityScore:basic.authenticityScore?.display,validityChecks:basic.validityChecks}})});
       if(!res.ok){setAiError(`서버 오류 (${res.status})`);setStage("result");return;}
       const data=await res.json();if(data.error||data.parseError){setAiError(data.error||"AI 결과 생성 실패");setStage("result");return;}
       setAiResults(data);setStage("result");
@@ -279,40 +299,71 @@ export default function App(){
       <div style={S.card}>
         <div style={{fontSize:16,fontWeight:700,marginBottom:14,color:"#f1f5f9"}}>지원 기업 (선택)</div>
         <div style={{marginBottom:16}}>
-          <input style={S.input} placeholder="기업명 입력 (예: 삼성전자)" value={companyName} onChange={e=>setCompanyName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){if(companyName.trim())analyzeCompanyInBackground();startNewSession();}}}/>
+          <input style={S.input} placeholder="기업명 입력 (예: 삼성전자)" value={companyName} onChange={e=>setCompanyName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){if(companyName.trim())analyzeCompanyInBackground();setStage("pre_tip");}}}/>
         </div>
-        <button style={{...S.btn(true),width:"100%"}} onClick={()=>{if(companyName.trim())analyzeCompanyInBackground();startNewSession();}}>검사 시작하기</button>
+        <button style={{...S.btn(true),width:"100%"}} onClick={()=>{if(companyName.trim())analyzeCompanyInBackground();setStage("pre_tip");}}>다음</button>
         <div style={{textAlign:"center",marginTop:12,fontSize:13,color:"#94a3b8"}}>입력하지 않아도 검사는 진행됩니다</div>
       </div>
     </div></div>
   );
 
+  // ═══ PRE-TIP (검사 전 팁) ═══
+  if(stage==="pre_tip") {
+    const tips=[
+      {emoji:"🎯",title:"정답은 없어요",body:"인성검사는 좋은 성격/나쁜 성격을 가리는 게 아니에요. \"이 사람이 어떤 사람인가\"를 보는 거예요. 솔직하게 답할수록 좋은 결과가 나와요."},
+      {emoji:"🙅",title:"너무 완벽한 답변은 오히려 불리해요",body:"인성검사는 성인군자를 채용하는 게 아닙니다. 적당한 약점 인정이 오히려 신뢰도를 높여줍니다."},
+      {emoji:"🔁",title:"비슷한 질문이 여러 번 나와요",body:"일부러 그렇게 설계되어 있어요. 앞에서 한 답과 뒤에서 한 답이 모순되면 신뢰도 점수가 떨어져요. 문항을 끝까지 읽고 답하세요."},
+      {emoji:"↔️",title:"\"~하지 않는다\" 문항을 주의하세요",body:"\"일을 미루는 경향이 있다\"처럼 부정적 표현 문항이 섞여 있어요. 이런 문항은 점수가 반대로 계산돼요. 빠르게 풀되, 문장 끝까지 읽으세요."},
+      {emoji:"⏱️",title:"시간은 충분해요, 하지만 너무 오래 고민하지 마세요",body:"직감적으로 1~2초 안에 답하는 게 가장 정확해요. 고민이 길어지면 오히려 솔직한 답에서 멀어져요."},
+    ];
+    return(
+      <div style={S.wrap}><div style={S.box}>
+        <div style={{height:24}}/>
+        <DeepHeader subtitle={"검사 전 꼭 읽어주세요"}/>
+        <div style={{...S.card,background:"rgba(99,102,241,0.06)",border:"1px solid rgba(139,92,246,0.3)",padding:"16px 18px",marginBottom:14}}>
+          <div style={{fontSize:14,lineHeight:1.7,color:"#cbd5e0"}}>
+            검사 시작 전에 <span style={{color:"#c4b5fd",fontWeight:700}}>5가지 핵심 팁</span>을 확인해 주세요. 이 팁만 알아도 실제 인성검사에서 통과 가능성이 크게 올라갑니다.
+          </div>
+        </div>
+        {tips.map((t,i)=>(
+          <div key={i} style={{...S.card,padding:"18px 20px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+              <span style={{fontSize:24}}>{t.emoji}</span>
+              <span style={{fontSize:11,fontWeight:900,color:"#a78bfa",background:"rgba(139,92,246,0.15)",padding:"2px 8px",borderRadius:6,letterSpacing:1}}>TIP {i+1}</span>
+            </div>
+            <div style={{fontSize:16,fontWeight:800,color:"#f1f5f9",marginBottom:8,lineHeight:1.5}}>{t.title}</div>
+            <div style={{fontSize:14,lineHeight:1.8,color:"#cbd5e0"}}>{t.body}</div>
+          </div>
+        ))}
+        <button style={{...S.btn(true),display:"block",width:"100%",padding:"18px",fontSize:18,fontWeight:800,marginTop:8,boxShadow:"0 6px 24px rgba(99,102,241,0.3)"}} onClick={()=>startNewSession()}>
+          확인했어요, 검사 시작 →
+        </button>
+        <button style={{display:"block",width:"100%",marginTop:10,padding:"12px",background:"transparent",border:"none",color:"#94a3b8",fontSize:13,cursor:"pointer"}} onClick={()=>setStage("company_input")}>← 기업명 다시 입력</button>
+        <div style={{height:32}}/>
+      </div></div>
+    );
+  }
+
   if(stage==="test_loading") return(<div style={S.wrap}><div style={S.box}><div style={{height:60}}/><DeepHeader/><Spinner text="딥둥이가 맞춤 결과 리포트를 만들고 있어요..."/></div></div>);
 
   // ═══ RESULT ═══
   if(stage==="result"&&basicResults){
-    const{scores:sc,adjustedScores:adj,sdPct:sdP,consistencyPct:conP,trustScore:trust,personalityType:pType,validityChecks:vc}=basicResults;
+    const{scores:sc,adjustedScores:adj,sdPct:sdP,consistencyPct:conP,stabilityScore:stab,authenticityScore:auth,personalityType:pType,validityChecks:vc}=basicResults;
     const mins=endTime&&startTime?Math.round((endTime-startTime)/60000):"–";
     const radarDims=DIMS_ORDER;
     const radarLabels={...DIM_LABELS};
     const getPercentile=(s)=>s>=90?"상위 5%":s>=80?"상위 10%":s>=70?"상위 20%":s>=60?"상위 35%":s>=50?"평균":s>=40?"하위 35%":s>=30?"하위 20%":"하위 10%";
     const getPctColor=(s)=>s>=70?"#6ee7b7":s>=50?"#fbbf24":"#f87171";
 
-    // 응답 신뢰도 색상
-    const trustColor = trust.raw >= 80 ? "#6ee7b7" : trust.raw >= 65 ? "#fbbf24" : trust.raw >= 50 ? "#fb923c" : "#f87171";
-    // 신뢰도 내부 요소 해석 (일관성·솔직성·탐지 이슈를 풀어서 설명)
+    const scoreColor = (raw) => raw >= 80 ? "#6ee7b7" : raw >= 65 ? "#fbbf24" : raw >= 50 ? "#fb923c" : "#f87171";
+    const stabColor = scoreColor(stab.raw);
+    const authColor = scoreColor(auth.raw);
+    // 간단 해석 한 줄
+    const stabOneLine = stab.raw >= 65 ? "비슷한 문항에 일관되게 응답" : stab.raw >= 50 ? "대체로 일관적이지만 일부 모순" : "응답 패턴 변동이 커 재점검 권장";
+    const authOneLine = auth.raw >= 65 ? "솔직하고 현실적인 응답 패턴" : auth.raw >= 50 ? "대체로 솔직하나 일부 과장 경향" : "과장/비현실적 응답 신호 감지";
+    // 상세 설명용
     const conLv = conP>=80?"매우 일관적":conP>=60?"양호":conP>=40?"일부 모순":"응답 모순 심각";
     const sdLv = sdP<=40?"매우 솔직":sdP<=60?"양호":"과장 응답 경향 일부 감지";
-    const trustNarrative = (() => {
-      const parts = [];
-      parts.push(`일관성은 ${conLv}`);
-      parts.push(`솔직성은 ${sdLv}`);
-      if (vc.allSame.detected) parts.push("연속 동일값 패턴이 감지되어 감점");
-      if (vc.lowVariance.detected) parts.push("응답 변동이 매우 적어 감점");
-      if (vc.extremeHigh.detected) parts.push("전반적으로 점수가 과도하게 높아 감점");
-      if (vc.infrequency.detected) parts.push("일부 응답 패턴에서 주의가 필요해 감점");
-      return parts.join(" · ");
-    })();
 
     // 종합 경고 레벨 (비빈도는 직접 언급하지 않음)
     const hasAnyWarning = vc.allSame.detected || vc.lowVariance.detected || vc.extremeHigh.detected || vc.outlier.extremeLows.length > 0;
@@ -379,18 +430,26 @@ export default function App(){
           </div>}
         </div>}
 
-        {/* 응답 신뢰도 (통합 지표) */}
-        <div style={{...S.card,textAlign:"center",padding:"28px 22px"}}>
-          <div style={{fontSize:13,letterSpacing:2,color:"#94a3b8",fontWeight:700,marginBottom:8}}>응답 신뢰도</div>
-          <div style={{fontSize:64,fontWeight:900,color:trustColor,lineHeight:1.1,marginBottom:6}}>{trust.display}%</div>
-          <div style={{fontSize:14,fontWeight:700,color:trustColor,marginBottom:14}}>{trust.level}</div>
-          <div style={{fontSize:13,color:"#cbd5e0",lineHeight:1.7,padding:"10px 14px",background:"rgba(15,23,42,0.45)",borderRadius:10,textAlign:"left"}}>
-            {trustNarrative}
+        {/* 응답 안정성 + 응답 진정성 (2개 카드 나란히) */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2, 1fr)",gap:12,marginBottom:16}}>
+          <div style={{...S.card,textAlign:"center",padding:"20px 16px",marginBottom:0}}>
+            <div style={{fontSize:11,letterSpacing:2,color:"#94a3b8",fontWeight:700,marginBottom:6}}>응답 안정성</div>
+            <div style={{fontSize:42,fontWeight:900,color:stabColor,lineHeight:1.1,marginBottom:4}}>{stab.display}%</div>
+            <div style={{fontSize:12,fontWeight:700,color:stabColor,marginBottom:8}}>{stab.level}</div>
+            <div style={{fontSize:12,color:"#cbd5e0",lineHeight:1.5,padding:"8px 10px",background:"rgba(15,23,42,0.45)",borderRadius:8}}>{stabOneLine}</div>
           </div>
-          {trust.raw < 40 && <div style={{fontSize:12,color:"#fdba74",marginTop:10,lineHeight:1.6,textAlign:"left",padding:"8px 12px",background:"rgba(251,146,60,0.08)",borderRadius:8,border:"1px solid rgba(251,146,60,0.2)"}}>
-            ⚠️ 신뢰도 내부 원점수가 낮습니다. 문항을 한 번 더 천천히 읽고 재검사를 권장해요. (실제 검사에서는 재검사 대상이 될 수 있는 구간이에요.)
-          </div>}
+          <div style={{...S.card,textAlign:"center",padding:"20px 16px",marginBottom:0}}>
+            <div style={{fontSize:11,letterSpacing:2,color:"#94a3b8",fontWeight:700,marginBottom:6}}>응답 진정성</div>
+            <div style={{fontSize:42,fontWeight:900,color:authColor,lineHeight:1.1,marginBottom:4}}>{auth.display}%</div>
+            <div style={{fontSize:12,fontWeight:700,color:authColor,marginBottom:8}}>{auth.level}</div>
+            <div style={{fontSize:12,color:"#cbd5e0",lineHeight:1.5,padding:"8px 10px",background:"rgba(15,23,42,0.45)",borderRadius:8}}>{authOneLine}</div>
+          </div>
         </div>
+        {(stab.raw < 40 || auth.raw < 40) && <div style={{...S.card,marginBottom:16,background:"rgba(251,146,60,0.06)",border:"1px solid rgba(251,146,60,0.25)",padding:"12px 16px"}}>
+          <div style={{fontSize:13,color:"#fdba74",lineHeight:1.7}}>
+            ⚠️ {stab.raw < 40 && auth.raw < 40 ? "안정성과 진정성 모두" : stab.raw < 40 ? "응답 안정성" : "응답 진정성"} 원점수가 낮습니다. 문항을 한 번 더 천천히 읽고 재검사를 권장해요. (실제 검사에서는 재검사 대상이 될 수 있는 구간이에요.)
+          </div>
+        </div>}
 
         {/* 레이더 — 보정 점수 기반 */}
         <div style={S.card}>
@@ -399,15 +458,25 @@ export default function App(){
           <div style={{fontSize:12,color:"#64748b",textAlign:"center",marginTop:8}}>※ 차원별 점수는 실전 감각에 맞춰 보정(scaling)된 표시 점수입니다.</div>
         </div>
 
-        {/* 차원별 점수 — 보정 점수 */}
+        {/* 차원별 점수 — 보정 점수 + 등급 */}
         <div style={S.card}>
           <div style={S.secTtl}>차원별 상세 점수</div>
-          {radarDims.map(d=>(
-            <div key={d} style={S.dimBar}>
-              <div style={S.dimLbl}><span>{radarLabels[d]||d}</span><span style={{fontWeight:700,color:"#60a5fa"}}>{adj[d]}</span></div>
-              <div style={S.barBg}><div style={S.barFill(adj[d])}/></div>
-            </div>
-          ))}
+          <div style={{fontSize:12,color:"#94a3b8",marginBottom:12,lineHeight:1.6}}>
+            등급 기준: <span style={{fontWeight:700,color:"#10b981"}}>S</span> 65초과 · <span style={{fontWeight:700,color:"#3b82f6"}}>A</span> 55초과 · <span style={{fontWeight:700,color:"#f97316"}}>B</span> 40초과 · <span style={{fontWeight:700,color:"#ef4444"}}>C</span> 30초과 · <span style={{fontWeight:700,color:"#991b1b"}}>D</span> 30이하
+          </div>
+          {radarDims.map(d=>{
+            const g = getGrade(adj[d]);
+            return (<div key={d} style={S.dimBar}>
+              <div style={S.dimLbl}>
+                <span>{radarLabels[d]||d}</span>
+                <span style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:11,fontWeight:900,padding:"2px 8px",borderRadius:6,background:g.bg,color:g.color,letterSpacing:0.5}}>{g.grade}등급</span>
+                  <span style={{fontWeight:800,color:g.color,minWidth:28,textAlign:"right"}}>{adj[d]}</span>
+                </span>
+              </div>
+              <div style={S.barBg}><div style={S.barFill(adj[d], g.color)}/></div>
+            </div>);
+          })}
         </div>
 
         {/* 강약점 맵 — 보정 점수 */}
@@ -418,11 +487,11 @@ export default function App(){
             <div style={S.secTtl}>📌 나의 강약점 맵</div>
             <div style={{marginBottom:20}}>
               <div style={{fontSize:15,fontWeight:700,color:"#6ee7b7",marginBottom:10}}>🔺 강점 TOP 3</div>
-              {top3.map(({d,s},i)=>(<div key={d} style={{display:"flex",alignItems:"center",gap:12,marginBottom:8,padding:"10px 14px",background:"rgba(52,211,153,0.06)",borderRadius:10,border:"1px solid rgba(52,211,153,0.15)"}}><span style={{fontSize:20,fontWeight:900,color:"#6ee7b7",width:24}}>{i+1}</span><span style={{fontSize:15,fontWeight:700,color:"#e2e8f0",flex:1}}>{radarLabels[d]||d}</span><span style={{fontSize:18,fontWeight:800,color:"#60a5fa"}}>{s}점</span><span style={{fontSize:12,fontWeight:700,color:getPctColor(s),background:"rgba(0,0,0,0.2)",padding:"3px 8px",borderRadius:8}}>{getPercentile(s)}</span></div>))}
+              {top3.map(({d,s},i)=>{const g=getGrade(s);return(<div key={d} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,padding:"10px 14px",background:"rgba(52,211,153,0.06)",borderRadius:10,border:"1px solid rgba(52,211,153,0.15)"}}><span style={{fontSize:20,fontWeight:900,color:"#6ee7b7",width:24}}>{i+1}</span><span style={{fontSize:15,fontWeight:700,color:"#e2e8f0",flex:1}}>{radarLabels[d]||d}</span><span style={{fontSize:11,fontWeight:900,padding:"2px 8px",borderRadius:6,background:g.bg,color:g.color,letterSpacing:0.5}}>{g.grade}</span><span style={{fontSize:18,fontWeight:800,color:g.color}}>{s}점</span><span style={{fontSize:12,fontWeight:700,color:getPctColor(s),background:"rgba(0,0,0,0.2)",padding:"3px 8px",borderRadius:8}}>{getPercentile(s)}</span></div>);})}
             </div>
             <div style={{marginBottom:16}}>
               <div style={{fontSize:15,fontWeight:700,color:"#fb923c",marginBottom:10}}>🔻 보완 필요 TOP 3</div>
-              {bot3.map(({d,s},i)=>(<div key={d} style={{display:"flex",alignItems:"center",gap:12,marginBottom:8,padding:"10px 14px",background:"rgba(251,146,60,0.06)",borderRadius:10,border:"1px solid rgba(251,146,60,0.15)"}}><span style={{fontSize:20,fontWeight:900,color:"#fb923c",width:24}}>{i+1}</span><span style={{fontSize:15,fontWeight:700,color:"#e2e8f0",flex:1}}>{radarLabels[d]||d}</span><span style={{fontSize:18,fontWeight:800,color:"#60a5fa"}}>{s}점</span><span style={{fontSize:12,fontWeight:700,color:getPctColor(s),background:"rgba(0,0,0,0.2)",padding:"3px 8px",borderRadius:8}}>{getPercentile(s)}</span></div>))}
+              {bot3.map(({d,s},i)=>{const g=getGrade(s);return(<div key={d} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,padding:"10px 14px",background:"rgba(251,146,60,0.06)",borderRadius:10,border:"1px solid rgba(251,146,60,0.15)"}}><span style={{fontSize:20,fontWeight:900,color:"#fb923c",width:24}}>{i+1}</span><span style={{fontSize:15,fontWeight:700,color:"#e2e8f0",flex:1}}>{radarLabels[d]||d}</span><span style={{fontSize:11,fontWeight:900,padding:"2px 8px",borderRadius:6,background:g.bg,color:g.color,letterSpacing:0.5}}>{g.grade}</span><span style={{fontSize:18,fontWeight:800,color:g.color}}>{s}점</span><span style={{fontSize:12,fontWeight:700,color:getPctColor(s),background:"rgba(0,0,0,0.2)",padding:"3px 8px",borderRadius:8}}>{getPercentile(s)}</span></div>);})}
             </div>
             {bot3[0]&&bot3[0].s<40&&<div style={{fontSize:13,color:"#fb923c"}}>💡 {radarLabels[bot3[0].d]||bot3[0].d} 영역을 조금만 보완하면 프로파일이 훨씬 균형 잡힐 수 있어요. 관련 경험을 한두 개 준비해두면 면접에서 강점으로 바꿀 수 있습니다.</div>}
           </div>);
@@ -447,28 +516,39 @@ export default function App(){
           {pType.warnings.map((w,i)=>(<div key={i} style={S.tipItem}><span style={{position:"absolute",left:0,color:"#fdba74",fontWeight:700,fontSize:16}}>!</span>{w}</div>))}
         </div>
 
-        {/* 응답 신뢰도 상세 해석 (일관성+솔직성을 풀어서 설명) */}
+        {/* 응답 안정성/진정성 상세 해석 — 두 지표를 분리해 풀어 설명 */}
         <div style={S.card}>
-          <div style={S.secTtl}>📊 응답 신뢰도 상세 해석</div>
-          <div style={{fontSize:15,lineHeight:1.9,color:"#e2e8f0",marginBottom:14,padding:"12px 16px",background:"rgba(15,23,42,0.5)",borderRadius:10}}>
-            응답 신뢰도는 <span style={{fontWeight:700,color:"#a78bfa"}}>일관성(60%) + 솔직성(40%)</span>을 합산하고,
-            무성의 응답·극단값 패턴이 감지되면 감점을 반영한 통합 지표입니다.
-          </div>
-          <div style={{marginBottom:18}}>
-            <div style={{fontSize:15,fontWeight:700,color:conP>=80?"#6ee7b7":conP>=60?"#fbbf24":conP>=40?"#fb923c":"#f87171",marginBottom:6}}>· 일관성 요소 — {conLv}</div>
-            <div style={{fontSize:14,lineHeight:1.8,color:"#cbd5e0",paddingLeft:12}}>{conP>=80?"비슷한 내용의 문항에 일관되게 응답했어요. 아주 좋은 신호입니다.":conP>=60?"대체로 일관적이지만 몇 문항에서 소소한 모순이 있어요. 역문항만 조금 주의하면 쉽게 끌어올릴 수 있어요.":conP>=40?"역문항과 정문항 사이 모순이 꽤 보입니다. '~하지 않는다'류 표현을 반대로 읽었는지 점검하면 빠르게 개선됩니다.":"응답 일관성이 낮아 실제 검사에서 재검사 대상이 될 수 있어요. 다음엔 문항을 한 번 더 천천히 읽어주세요."}</div>
-          </div>
-          <div>
-            <div style={{fontSize:15,fontWeight:700,color:sdP<=40?"#6ee7b7":sdP<=60?"#fbbf24":"#f87171",marginBottom:6}}>· 솔직성 요소 — {sdLv}</div>
-            <div style={{fontSize:14,lineHeight:1.8,color:"#cbd5e0",paddingLeft:12}}>{sdP<=40?"자신의 약점도 솔직하게 인정하는 응답 패턴이에요. 실제 검사에서도 신뢰 받는 방향입니다.":sdP<=60?"대체로 솔직하지만 일부 '너무 완벽한' 응답이 섞여 있어요. 한두 문항만 더 현실적으로 답하면 충분히 통과할 수 있어요.":"과장 응답 경향이 강합니다. 약점을 인정하는 답변 1~2개만 포함해도 이 부분은 바로 개선됩니다."}</div>
-          </div>
-          {trust.penalty > 0 && <div style={{marginTop:18,padding:"12px 16px",background:"rgba(251,146,60,0.06)",borderRadius:10,border:"1px solid rgba(251,146,60,0.2)"}}>
-            <div style={{fontSize:14,fontWeight:700,color:"#fdba74",marginBottom:6}}>· 응답 패턴 감점 반영</div>
-            <div style={{fontSize:13,lineHeight:1.8,color:"#cbd5e0"}}>
-              응답 패턴 점검 카드에서 언급된 항목으로 인해 신뢰도에서 일부 감점이 반영되었어요.
-              위 "응답 패턴 점검" 섹션의 코칭 포인트만 반영하면 신뢰도는 빠르게 회복됩니다.
+          <div style={S.secTtl}>📊 응답 안정성 · 진정성 상세 해석</div>
+
+          {/* 응답 안정성 */}
+          <div style={{marginBottom:22,padding:"14px 16px",background:"rgba(15,23,42,0.4)",borderRadius:10,borderLeft:`3px solid ${stabColor}`}}>
+            <div style={{fontSize:15,fontWeight:700,color:stabColor,marginBottom:6}}>응답 안정성 {stab.display}% — {stab.level}</div>
+            <div style={{fontSize:13,color:"#94a3b8",marginBottom:8,lineHeight:1.6}}>
+              비슷한 문항에 일관되게 답했는지를 측정합니다. CC쌍 · 정역쌍 비교에 <span style={{color:"#cbd5e0",fontWeight:600}}>올-세임/로우-배리언스 감점</span>이 반영됩니다.
             </div>
-          </div>}
+            <div style={{fontSize:14,lineHeight:1.8,color:"#e2e8f0"}}>
+              <div style={{marginBottom:4}}>· 일관성 요소 — <span style={{fontWeight:700}}>{conLv}</span></div>
+              <div style={{paddingLeft:10}}>{conP>=80?"비슷한 내용의 문항에 일관되게 응답했어요. 아주 좋은 신호입니다.":conP>=60?"대체로 일관적이지만 몇 문항에서 소소한 모순이 있어요. 역문항만 조금 주의하면 쉽게 끌어올릴 수 있어요.":conP>=40?"역문항과 정문항 사이 모순이 꽤 보입니다. '~하지 않는다'류 표현을 반대로 읽었는지 점검하면 빠르게 개선됩니다.":"응답 일관성이 낮아 실제 검사에서 재검사 대상이 될 수 있어요. 다음엔 문항을 한 번 더 천천히 읽어주세요."}</div>
+            </div>
+            {stab.penalty > 0 && <div style={{marginTop:10,fontSize:13,color:"#fdba74",lineHeight:1.6}}>
+              · 무성의 패턴으로 <span style={{fontWeight:700}}>-{stab.penalty}점</span> 감점 반영 ({vc.allSame.detected?"연속 동일값":""}{vc.allSame.detected&&vc.lowVariance.detected?" · ":""}{vc.lowVariance.detected?"응답 변동 매우 적음":""})
+            </div>}
+          </div>
+
+          {/* 응답 진정성 */}
+          <div style={{padding:"14px 16px",background:"rgba(15,23,42,0.4)",borderRadius:10,borderLeft:`3px solid ${authColor}`}}>
+            <div style={{fontSize:15,fontWeight:700,color:authColor,marginBottom:6}}>응답 진정성 {auth.display}% — {auth.level}</div>
+            <div style={{fontSize:13,color:"#94a3b8",marginBottom:8,lineHeight:1.6}}>
+              과장·비현실적 응답이 감지되는지를 측정합니다. SD(사회적 바람직성) 문항 기반에 <span style={{color:"#cbd5e0",fontWeight:600}}>응답 패턴 감점</span>이 반영됩니다.
+            </div>
+            <div style={{fontSize:14,lineHeight:1.8,color:"#e2e8f0"}}>
+              <div style={{marginBottom:4}}>· 솔직성 요소 — <span style={{fontWeight:700}}>{sdLv}</span></div>
+              <div style={{paddingLeft:10}}>{sdP<=40?"자신의 약점도 솔직하게 인정하는 응답 패턴이에요. 실제 검사에서도 신뢰 받는 방향입니다.":sdP<=60?"대체로 솔직하지만 일부 '너무 완벽한' 응답이 섞여 있어요. 한두 문항만 더 현실적으로 답하면 충분히 통과할 수 있어요.":"과장 응답 경향이 강합니다. 약점을 인정하는 답변 1~2개만 포함해도 이 부분은 바로 개선됩니다."}</div>
+            </div>
+            {auth.penalty > 0 && <div style={{marginTop:10,fontSize:13,color:"#fdba74",lineHeight:1.6}}>
+              · 응답 패턴으로 <span style={{fontWeight:700}}>-{auth.penalty}점</span> 감점 반영 ({vc.infrequency.detected?"일부 응답 주의 신호":""}{vc.infrequency.detected&&vc.extremeHigh.detected?" · ":""}{vc.extremeHigh.detected?"전반적 고점 과다":""})
+            </div>}
+          </div>
         </div>
 
         {/* 실전 대비 코칭 가이드 — 진단+코칭 톤 */}
