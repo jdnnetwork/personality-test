@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { selectQuestions, DIM_LABELS, DIMS_ORDER } from "./questions.js";
 import { computeResults as computeResultsLib, adjustCompanyScore, getGrade } from "./scoring.js";
 import ResultView from "./ResultView.jsx";
+import IntroScreen from "./IntroScreen.jsx";
 
 const PER_PAGE=10;
 // URL에 ?dev=true 가 있을 때만 활성화되는 개발자 테스트 모드
@@ -187,18 +188,7 @@ export default function App(){
   };
 
   // ═══ INTRO ═══
-  if(stage==="intro") return(
-    <div style={S.wrap}><div style={S.box}>
-      <div style={{height:80}}/>
-      <DeepHeader subtitle={"200문항 · AI 맞춤 분석 · 약 25분"}/>
-      <div style={{height:32}}/>
-      <button style={{...S.btn(true),display:"block",width:"100%",padding:"18px",fontSize:18,fontWeight:800,boxShadow:"0 6px 24px rgba(99,102,241,0.3)"}} onClick={()=>setStage("company_input")}>
-        검사 시작하기
-      </button>
-      <div style={{textAlign:"center",marginTop:24,fontSize:12,color:"#64748b"}}>Powered by 457deep · 딥둥이</div>
-      <div style={{height:32}}/>
-    </div></div>
-  );
+  if(stage==="intro") return <IntroScreen onStart={()=>setStage("company_input")} />;
 
   // ═══ COMPANY INPUT ═══
   if(stage==="company_input") {
