@@ -168,26 +168,13 @@ export default function App(){
   // ═══ INTRO ═══
   if(stage==="intro") return(
     <div style={S.wrap}><div style={S.box}>
+      <div style={{height:80}}/>
+      <DeepHeader subtitle={"200문항 · AI 맞춤 분석 · 약 25분"}/>
       <div style={{height:32}}/>
-      <DeepHeader subtitle={"Big5 + 자주성 + 집중력 기반 AI 맞춤 분석\n사기업 인성검사 대비 200문항"}/>
-      <div style={{...S.card,padding:20}}>
-        <div style={{fontSize:15,fontWeight:700,marginBottom:12,color:"#f1f5f9"}}>측정 차원</div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
-          {DIMS_ORDER.map(d=><span key={d} style={S.tag}>{DIM_LABELS[d]}</span>)}
-        </div>
-        <div style={{fontSize:13,color:"#a78bfa",padding:"10px 14px",background:"rgba(139,92,246,0.08)",borderRadius:10,border:"1px solid rgba(139,92,246,0.15)",lineHeight:1.7,marginBottom:12}}>
-          🔍 <span style={{fontWeight:700}}>탐지 시스템</span>: 응답 신뢰도 통합 지표 · 매 검사 랜덤 출제(풀 720+) · 사회적 바람직성(SD) · 일관성 검증(CC) · 차원 내 정역 쌍 · <span style={{color:"#f87171",fontWeight:700}}>비빈도(IF)</span> · <span style={{color:"#f87171",fontWeight:700}}>올-세임/로우-배리언스 탐지</span> · <span style={{color:"#f87171",fontWeight:700}}>극단값 패턴 탐지</span>
-        </div>
-        <div style={{fontSize:15,lineHeight:2.2,color:"#cbd5e0"}}>
-          <span style={{color:"#60a5fa",fontWeight:700}}>STEP 1</span> 지원 기업명 입력 (선택)<br/>
-          <span style={{color:"#a78bfa",fontWeight:700}}>STEP 2</span> 200문항 인성검사 (약 25분)<br/>
-          <span style={{color:"#c084fc",fontWeight:700}}>STEP 3</span> AI 맞춤 결과 + TIP 제공
-        </div>
-      </div>
       <button style={{...S.btn(true),display:"block",width:"100%",padding:"18px",fontSize:18,fontWeight:800,boxShadow:"0 6px 24px rgba(99,102,241,0.3)"}} onClick={()=>setStage("company_input")}>
         검사 시작하기
       </button>
-      <div style={{textAlign:"center",marginTop:16,fontSize:12,color:"#64748b"}}>Powered by 457deep · 딥둥이</div>
+      <div style={{textAlign:"center",marginTop:24,fontSize:12,color:"#64748b"}}>Powered by 457deep · 딥둥이</div>
       <div style={{height:32}}/>
     </div></div>
   );
@@ -446,7 +433,7 @@ export default function App(){
           <div style={{marginBottom:22,padding:"14px 16px",background:"rgba(15,23,42,0.4)",borderRadius:10,borderLeft:`3px solid ${stabColor}`}}>
             <div style={{fontSize:15,fontWeight:700,color:stabColor,marginBottom:6}}>응답 안정성 {stab.display}% — {stab.level}</div>
             <div style={{fontSize:13,color:"#94a3b8",marginBottom:8,lineHeight:1.6}}>
-              비슷한 문항에 일관되게 답했는지를 측정합니다. CC쌍 · 정역쌍 비교에 <span style={{color:"#cbd5e0",fontWeight:600}}>올-세임/로우-배리언스 감점</span>이 반영됩니다.
+              비슷한 질문에 일관되게 답했는지를 보는 지표예요. 같은 값만 연속해서 고르거나 모든 문항에 비슷한 점수만 주면 점수가 낮아집니다.
             </div>
             <div style={{fontSize:14,lineHeight:1.8,color:"#e2e8f0"}}>
               <div style={{marginBottom:4}}>· 일관성 요소 — <span style={{fontWeight:700}}>{conLv}</span></div>
@@ -461,7 +448,7 @@ export default function App(){
           <div style={{padding:"14px 16px",background:"rgba(15,23,42,0.4)",borderRadius:10,borderLeft:`3px solid ${authColor}`}}>
             <div style={{fontSize:15,fontWeight:700,color:authColor,marginBottom:6}}>응답 진정성 {auth.display}% — {auth.level}</div>
             <div style={{fontSize:13,color:"#94a3b8",marginBottom:8,lineHeight:1.6}}>
-              과장·비현실적 응답이 감지되는지를 측정합니다. SD(사회적 바람직성) 문항 기반에 <span style={{color:"#cbd5e0",fontWeight:600}}>응답 패턴 감점</span>이 반영됩니다.
+              답변이 얼마나 솔직한지를 보는 지표예요. 모든 차원에서 지나치게 완벽한 점수가 나오거나 과장된 답변이 감지되면 점수가 낮아집니다.
             </div>
             <div style={{fontSize:14,lineHeight:1.8,color:"#e2e8f0"}}>
               <div style={{marginBottom:4}}>· 솔직성 요소 — <span style={{fontWeight:700}}>{sdLv}</span></div>
@@ -562,7 +549,18 @@ export default function App(){
           </div>}
         </>}
 
-        {aiError&&<div style={{...S.card,borderColor:"rgba(248,113,113,0.3)"}}><div style={{color:"#f87171",fontSize:15,fontWeight:600}}>AI 분석 오류: {aiError}</div><div style={{color:"#cbd5e0",fontSize:14,marginTop:8}}>기본 결과와 TIP은 위에서 확인하세요.</div></div>}
+        {aiError&&<div style={{...S.card,borderColor:"rgba(251,146,60,0.35)",background:"rgba(251,146,60,0.06)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <span style={{fontSize:22}}>⏳</span>
+            <span style={{color:"#fdba74",fontSize:16,fontWeight:800}}>AI 분석을 불러오는 중입니다</span>
+          </div>
+          <div style={{color:"#cbd5e0",fontSize:14,lineHeight:1.7,marginBottom:14}}>
+            잠시 후 다시 시도해주세요. 기본 결과는 위에서 확인하실 수 있어요.
+          </div>
+          <button style={{...S.btn(true),width:"100%",padding:"12px"}} onClick={()=>{if(basicResults)generateAiResults(basicResults);}}>
+            🔄 AI 분석 다시 시도
+          </button>
+        </div>}
 
         <div style={{textAlign:"center",padding:20}}>
           <img src="/deepdungi.png" alt="딥둥이" style={{width:52,height:52,borderRadius:"50%",objectFit:"cover",marginBottom:10}}/>

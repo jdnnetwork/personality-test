@@ -5,6 +5,8 @@
 
 [functions]
   node_bundler = "esbuild"
+  # Netlify Pro/Business 플랜에서 최대 26초까지 허용
+  timeout = 26
 
 [[redirects]]
   from = "/api/*"
