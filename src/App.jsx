@@ -35,6 +35,212 @@ function Spinner({text}){return(<div style={{textAlign:"center",padding:40}}><di
 
 function DeepHeader({subtitle}){return(<div style={{textAlign:"center",marginBottom:24}}><img src="/deepdungi.png" alt="딥둥이" style={{width:100,height:100,borderRadius:"50%",objectFit:"cover",marginBottom:12,border:"3px solid rgba(96,165,250,0.3)"}}/><div style={{fontSize:12,letterSpacing:6,color:"#94a3b8",textTransform:"uppercase",marginBottom:4,fontWeight:700}}>457deep</div><h1 style={{fontSize:26,fontWeight:900,background:"linear-gradient(135deg,#60a5fa,#a78bfa)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",lineHeight:1.3,marginBottom:8}}>딥둥이 모의 인성검사</h1>{subtitle&&<p style={{color:"#cbd5e0",fontSize:14,lineHeight:1.6,whiteSpace:"pre-line"}}>{subtitle}</p>}</div>);}
 
+const COMPANY_INPUT_CSS = `
+.cinput-page {
+  --accent: #818cf8;
+  --accent-soft: rgba(129,140,248,0.12);
+  --accent-glow: rgba(129,140,248,0.3);
+  --bg: #0a0c10;
+  --border: rgba(255,255,255,0.07);
+  --border-strong: rgba(255,255,255,0.14);
+  --text: #e5e7eb;
+  --text-muted: #8b92a0;
+  --text-dim: #5c6370;
+  position: relative;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Noto Sans KR', sans-serif;
+  letter-spacing: -0.01em;
+  overflow-x: hidden;
+}
+.cinput-page, .cinput-page * { box-sizing: border-box; }
+.cinput-haze {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, var(--accent-soft), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 100%, rgba(129,140,248,0.06), transparent 60%);
+}
+.cinput-content {
+  position: relative; z-index: 1; min-height: 100vh;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 48px 24px;
+}
+.cinput-topbar {
+  width: 100%; max-width: 820px;
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+}
+.cinput-brand { color: var(--text-muted); display: inline-flex; align-items: center; }
+.cinput-brand-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); margin-right: 8px; box-shadow: 0 0 8px var(--accent-glow);
+}
+.cinput-version { color: var(--text-dim); }
+.cinput-hero {
+  margin-top: 56px; text-align: center; max-width: 560px;
+}
+.cinput-hero-badge {
+  position: relative; width: 96px; height: 96px;
+  margin: 0 auto 20px;
+  border: 1px solid var(--border-strong); border-radius: 16px;
+  background: radial-gradient(circle at 50% 40%, var(--accent-soft), transparent 70%);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.cinput-hero-badge img {
+  width: 70px; height: 70px; object-fit: contain;
+  border-radius: 50%; filter: drop-shadow(0 6px 16px rgba(0,0,0,0.4));
+}
+.cinput-hero-title {
+  font-size: 28px; font-weight: 700; letter-spacing: -0.025em;
+  margin: 0 0 12px; line-height: 1.2; color: var(--text);
+}
+.cinput-hero-title em {
+  font-style: normal; color: var(--accent);
+  text-shadow: 0 0 24px var(--accent-glow);
+}
+.cinput-hero-meta {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--text-muted); letter-spacing: 0.12em; text-transform: uppercase;
+}
+.cinput-hero-meta .sep { color: var(--text-dim); margin: 0 8px; }
+.cinput-card {
+  width: 100%; max-width: 560px; margin-top: 36px;
+  background:
+    radial-gradient(circle at 50% 0%, var(--accent-soft) 0%, transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+  border: 1px solid var(--border-strong); border-radius: 16px;
+  padding: 36px 36px 32px;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 24px 60px rgba(0,0,0,0.4);
+  position: relative;
+}
+.cinput-corner {
+  position: absolute; width: 14px; height: 14px;
+  border-color: var(--accent); border-style: solid; opacity: 0.5;
+}
+.cinput-corner.tl { top: 10px; left: 10px; border-width: 1px 0 0 1px; }
+.cinput-corner.tr { top: 10px; right: 10px; border-width: 1px 1px 0 0; }
+.cinput-corner.bl { bottom: 10px; left: 10px; border-width: 0 0 1px 1px; }
+.cinput-corner.br { bottom: 10px; right: 10px; border-width: 0 1px 1px 0; }
+.cinput-field-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 12px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.cinput-field-label {
+  font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: -0.01em;
+}
+.cinput-field-tag {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  color: var(--text-dim); letter-spacing: 0.15em; text-transform: uppercase;
+}
+.cinput-input-wrap { position: relative; margin-bottom: 22px; }
+.cinput-input {
+  width: 100%; padding: 16px 18px 16px 44px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border-strong); border-radius: 10px;
+  color: var(--text); font-family: inherit; font-size: 14px;
+  letter-spacing: -0.01em; transition: all 0.15s ease; outline: none;
+}
+.cinput-input::placeholder { color: var(--text-dim); font-size: 13px; }
+.cinput-input:focus {
+  border-color: var(--accent); background: rgba(129,140,248,0.04);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.cinput-input-wrap[data-error="1"] .cinput-input {
+  border-color: rgba(248,113,113,0.5);
+}
+.cinput-input-prefix {
+  position: absolute; left: 18px; top: 50%; transform: translateY(-50%);
+  font-family: 'JetBrains Mono', monospace; font-size: 13px;
+  color: var(--accent); pointer-events: none; opacity: 0.7;
+}
+.cinput-hint {
+  font-size: 11.5px; color: var(--text-muted);
+  margin: -14px 0 22px; padding-left: 4px; line-height: 1.5;
+}
+.cinput-hint code {
+  font-family: 'JetBrains Mono', monospace; color: var(--accent);
+  background: var(--accent-soft); padding: 1px 6px; border-radius: 3px; font-size: 11px;
+}
+.cinput-hint .arr { color: var(--text-dim); margin: 0 4px; }
+.cinput-cta {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 10px; width: 100%; padding: 16px 28px;
+  background: var(--accent-soft); border: 1px solid var(--accent);
+  color: var(--text); font-family: inherit; font-size: 14px; font-weight: 600;
+  letter-spacing: 0.02em; border-radius: 10px; cursor: pointer;
+  transition: all 0.15s ease; box-shadow: 0 0 24px rgba(129,140,248,0.15);
+}
+.cinput-cta:hover:not(:disabled) {
+  background: var(--accent); color: var(--bg);
+  box-shadow: 0 0 32px rgba(129,140,248,0.4);
+}
+.cinput-cta:disabled { opacity: 0.55; cursor: not-allowed; }
+.cinput-arrow {
+  font-family: 'JetBrains Mono', monospace; font-weight: 400;
+  transition: transform 0.15s ease;
+}
+.cinput-cta:hover:not(:disabled) .cinput-arrow { transform: translateX(3px); }
+.cinput-skip-note {
+  margin-top: 16px; text-align: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  color: var(--text-dim); letter-spacing: 0.12em; text-transform: uppercase;
+}
+.cinput-confirm {
+  margin-bottom: 14px; padding: 14px 16px;
+  background: rgba(129,140,248,0.08);
+  border: 1px solid rgba(129,140,248,0.3);
+  border-radius: 10px;
+}
+.cinput-confirm-text {
+  font-size: 13px; color: #cbd5e0; line-height: 1.7; margin-bottom: 12px;
+}
+.cinput-confirm-text strong { color: var(--accent); font-weight: 700; }
+.cinput-confirm-actions { display: flex; gap: 8px; }
+.cinput-confirm-yes {
+  flex: 1; padding: 11px;
+  background: var(--accent-soft); border: 1px solid var(--accent);
+  color: var(--text); font-family: inherit; font-size: 13px; font-weight: 600;
+  border-radius: 8px; cursor: pointer; transition: all 0.15s ease;
+}
+.cinput-confirm-yes:hover { background: var(--accent); color: var(--bg); }
+.cinput-confirm-no {
+  padding: 11px 18px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border-strong);
+  color: var(--text-muted); font-family: inherit; font-size: 13px; font-weight: 600;
+  border-radius: 8px; cursor: pointer;
+}
+.cinput-error {
+  margin-bottom: 14px; padding: 14px 16px;
+  background: rgba(248,113,113,0.08);
+  border: 1px solid rgba(248,113,113,0.3);
+  border-radius: 10px;
+}
+.cinput-error-text {
+  font-size: 12.5px; color: #fca5a5; line-height: 1.7; margin-bottom: 12px;
+}
+.cinput-error-btn {
+  width: 100%; padding: 10px 14px;
+  font-size: 12.5px; font-weight: 600;
+  border: 1px solid rgba(248,113,113,0.5);
+  border-radius: 8px;
+  background: rgba(15,23,42,0.4);
+  color: #fca5a5; cursor: pointer; font-family: inherit;
+}
+.cinput-error-note {
+  font-size: 10.5px; color: #fca5a5; opacity: 0.7;
+  line-height: 1.6; margin-top: 8px; text-align: center;
+}
+@media (max-width: 640px) {
+  .cinput-content { padding: 24px 16px; }
+  .cinput-card { padding: 28px 22px 24px; margin-top: 24px; }
+  .cinput-hero { margin-top: 32px; }
+  .cinput-hero-title { font-size: 24px; }
+}
+`;
+
 export default function App(){
   const[stage,setStage]=useState("intro");
   const[companyName,setCompanyName]=useState("");
@@ -210,36 +416,84 @@ export default function App(){
     const isConfirm=vs==="confirm";
     const isError=vs==="error";
     return(
-    <div style={S.wrap}><div style={S.box}>
-      <div style={{height:32}}/>
-      <DeepHeader subtitle={"사기업 인성검사 · 200문항 · 약 25분"}/>
-      <div style={S.card}>
-        <div style={{fontSize:16,fontWeight:700,marginBottom:14,color:"#f1f5f9"}}>지원 기업 (선택)</div>
-        <div style={{marginBottom:16}}>
-          <input style={{...S.input,borderColor:isError?"rgba(248,113,113,0.5)":S.input.borderColor}} placeholder="정확한 기업명을 쓰세요  현차 X → 현대자동차" value={companyName} disabled={isValidating||isConfirm} onChange={e=>{setCompanyName(e.target.value);if(companyValidation)setCompanyValidation(null);}} onKeyDown={e=>{if(e.key==="Enter"&&!isValidating&&!isConfirm)validateCompanyAndStart();}}/>
+      <div className="cinput-page">
+        <style>{COMPANY_INPUT_CSS}</style>
+        <div className="cinput-haze" />
+        <div className="cinput-content">
+          <div className="cinput-topbar">
+            <div className="cinput-brand"><span className="cinput-brand-dot" />457DEEP · 딥둥이</div>
+            <div className="cinput-version">v 2.1.0</div>
+          </div>
+
+          <div className="cinput-hero">
+            <div className="cinput-hero-badge">
+              <img src="/deepdungi.png" alt="딥둥이" />
+            </div>
+            <h1 className="cinput-hero-title">딥둥이 <em>모의 인성검사</em></h1>
+            <div className="cinput-hero-meta">
+              사기업 인성검사<span className="sep">·</span>200문항<span className="sep">·</span>약 25분
+            </div>
+          </div>
+
+          <div className="cinput-card">
+            <span className="cinput-corner tl" />
+            <span className="cinput-corner tr" />
+            <span className="cinput-corner bl" />
+            <span className="cinput-corner br" />
+
+            <div className="cinput-field-head">
+              <div className="cinput-field-label">지원 기업</div>
+              <div className="cinput-field-tag">OPTIONAL</div>
+            </div>
+
+            <div className="cinput-input-wrap" data-error={isError ? "1" : "0"}>
+              <span className="cinput-input-prefix">›</span>
+              <input
+                className="cinput-input"
+                type="text"
+                placeholder="정확한 기업명을 입력해 주세요"
+                autoComplete="off"
+                value={companyName}
+                disabled={isValidating||isConfirm}
+                onChange={e=>{setCompanyName(e.target.value);if(companyValidation)setCompanyValidation(null);}}
+                onKeyDown={e=>{if(e.key==="Enter"&&!isValidating&&!isConfirm)validateCompanyAndStart();}}
+              />
+            </div>
+
+            <div className="cinput-hint">
+              약어 대신 정식 명칭을 입력하면 더 정확해요. <code>현차</code><span className="arr">→</span><code>현대자동차</code>
+            </div>
+
+            {isConfirm && (
+              <div className="cinput-confirm">
+                <div className="cinput-confirm-text">
+                  혹시 <strong>"{companyValidation.correctedName}"</strong>을(를) 말씀하시나요?
+                  {companyValidation.message&&companyValidation.message!==`'${companyValidation.correctedName}'를 말씀하시나요?`&&<div style={{fontSize:12,color:"#8b92a0",marginTop:4}}>{companyValidation.message}</div>}
+                </div>
+                <div className="cinput-confirm-actions">
+                  <button className="cinput-confirm-yes" onClick={acceptCorrection}>네, 맞아요</button>
+                  <button className="cinput-confirm-no" onClick={rejectCorrection}>다시 입력</button>
+                </div>
+              </div>
+            )}
+
+            {isError && (
+              <div className="cinput-error">
+                <div className="cinput-error-text">⚠️ {companyValidation.message}</div>
+                <button className="cinput-error-btn" onClick={proceedAsIs}>그래도 이 이름으로 검사 진행하기 →</button>
+                <div className="cinput-error-note">기업 맞춤 분석 없이 기본 결과만 표시됩니다</div>
+              </div>
+            )}
+
+            <button className="cinput-cta" disabled={isValidating||isConfirm} onClick={validateCompanyAndStart}>
+              {isValidating ? "기업명 확인 중..." : <>검사 시작하기 <span className="cinput-arrow">→</span></>}
+            </button>
+
+            <div className="cinput-skip-note">입력하지 않아도 검사는 진행돼요</div>
+          </div>
         </div>
-        {isConfirm&&<div style={{marginBottom:14,padding:"14px 16px",background:"rgba(96,165,250,0.08)",border:"1px solid rgba(96,165,250,0.3)",borderRadius:12}}>
-          <div style={{fontSize:14,color:"#cbd5e0",lineHeight:1.7,marginBottom:12}}>
-            혹시 <span style={{fontWeight:800,color:"#93c5fd"}}>"{companyValidation.correctedName}"</span>을(를) 말씀하시나요?
-            {companyValidation.message&&companyValidation.message!==`'${companyValidation.correctedName}'를 말씀하시나요?`&&<div style={{fontSize:13,color:"#94a3b8",marginTop:4}}>{companyValidation.message}</div>}
-          </div>
-          <div style={{display:"flex",gap:8}}>
-            <button style={{...S.btn(true),flex:1,padding:"12px"}} onClick={acceptCorrection}>네, 맞아요</button>
-            <button style={{padding:"12px 20px",border:"1px solid rgba(71,85,105,0.5)",borderRadius:12,background:"rgba(15,23,42,0.5)",color:"#cbd5e0",fontSize:15,fontWeight:700,cursor:"pointer"}} onClick={rejectCorrection}>다시 입력</button>
-          </div>
-        </div>}
-        {isError&&<div style={{marginBottom:14,padding:"14px 16px",background:"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:10}}>
-          <div style={{fontSize:13,color:"#fca5a5",lineHeight:1.7,marginBottom:12}}>⚠️ {companyValidation.message}</div>
-          <button style={{width:"100%",padding:"10px 14px",fontSize:13,fontWeight:600,border:"1px solid rgba(248,113,113,0.5)",borderRadius:8,background:"rgba(15,23,42,0.4)",color:"#fca5a5",cursor:"pointer"}} onClick={proceedAsIs}>그래도 이 이름으로 검사 진행하기 →</button>
-          <div style={{fontSize:11,color:"#fca5a5",opacity:0.7,lineHeight:1.6,marginTop:8,textAlign:"center"}}>기업 맞춤 분석 없이 기본 결과만 표시됩니다</div>
-        </div>}
-        <button style={{...S.btn(true),width:"100%",opacity:isValidating||isConfirm?0.55:1,cursor:isValidating||isConfirm?"not-allowed":"pointer"}} disabled={isValidating||isConfirm} onClick={validateCompanyAndStart}>
-          {isValidating?"기업명 확인 중...":"검사 시작하기"}
-        </button>
-        <div style={{textAlign:"center",marginTop:12,fontSize:13,color:"#94a3b8"}}>입력하지 않아도 검사는 진행됩니다</div>
       </div>
-    </div></div>
-  );
+    );
   }
 
   // ═══ PRE-TIP (검사 전 팁) ═══
