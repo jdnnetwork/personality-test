@@ -34,7 +34,7 @@ export default function IntroScreen({ onStart }) {
               <div className="intro-meta-lbl">맞춤 분석</div>
             </div>
             <div className="intro-meta-cell">
-              <div className="intro-meta-val">~25<span className="intro-meta-unit">MIN</span></div>
+              <div className="intro-meta-val">~30<span className="intro-meta-unit">MIN</span></div>
               <div className="intro-meta-lbl">소요</div>
             </div>
           </div>

@@ -4,7 +4,8 @@ import { computeResults as computeResultsLib, adjustCompanyScore, getGrade } fro
 import ResultView from "./ResultView.jsx";
 import IntroScreen from "./IntroScreen.jsx";
 
-const PER_PAGE=10;
+const PER_PAGE=5;
+const TIME_LIMIT_SEC = 30 * 60;
 // URL에 ?dev=true 가 있을 때만 활성화되는 개발자 테스트 모드
 const DEV_MODE = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("dev") === "true";
 
@@ -383,6 +384,206 @@ const TIPS_CSS = `
 }
 `;
 
+const TEST_PAPER_CSS = `
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap');
+.tp-page {
+  background: #f7f5ef;
+  color: #1a1d24;
+  font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, 'Noto Sans KR', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  letter-spacing: -0.01em;
+}
+.tp-page, .tp-page * { box-sizing: border-box; }
+.tp-shell {
+  max-width: 820px; margin: 0 auto;
+  min-height: 100vh; background: #f7f5ef;
+}
+.tp-top {
+  position: sticky; top: 0;
+  background: rgba(247,245,239,0.92);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid #e0dccd;
+  padding: 18px 40px 16px;
+  z-index: 10;
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 24px;
+}
+.tp-l { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.tp-l img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.tp-l-text { display: flex; flex-direction: column; min-width: 0; }
+.tp-title { font-size: 14px; font-weight: 600; color: #1a1d24; }
+.tp-co {
+  font-size: 12px; color: #7a7565; margin-top: 2px;
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline;
+}
+.tp-sep { color: #c8c1ac; }
+.tp-timer {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: #7a7565;
+}
+.tp-timer.over { color: #b91c1c; font-weight: 600; }
+.tp-r {
+  display: flex; align-items: center; gap: 14px;
+  flex: 1; max-width: 340px; min-width: 140px;
+}
+.tp-track {
+  flex: 1; height: 3px;
+  background: #e0dccd; border-radius: 2px; overflow: hidden;
+}
+.tp-fill {
+  height: 100%; background: #1a1d24;
+  border-radius: 2px; transition: width 0.3s ease;
+}
+.tp-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: #1a1d24; font-weight: 500;
+  min-width: 54px; text-align: right;
+}
+.tp-body { padding: 48px 40px 56px; }
+.tp-pg {
+  font-size: 13px; color: #7a7565;
+  margin-bottom: 32px;
+  display: flex; align-items: baseline; gap: 14px;
+}
+.tp-pg b {
+  font-size: 42px; font-weight: 300;
+  color: #1a1d24; line-height: 1;
+  font-family: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+}
+.tp-pg span { font-style: italic; }
+.tp-q {
+  padding: 30px 0;
+  border-bottom: 1px solid #e0dccd;
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 8px 18px;
+  align-items: start;
+}
+.tp-q:last-of-type { border-bottom: none; }
+.tp-qn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: #7a7565;
+  padding-top: 6px; letter-spacing: 0.05em;
+}
+.tp-qt {
+  font-size: 17px; font-weight: 500;
+  line-height: 1.5; margin: 0 0 18px;
+  letter-spacing: -0.015em;
+  color: #3a3530;
+}
+.tp-qt.on { color: #1a1d24; }
+.tp-scale {
+  grid-column: 2;
+  display: flex; align-items: center; gap: 18px;
+}
+.tp-anc {
+  font-size: 15.5px; color: #3a3530;
+  font-weight: 600; flex-shrink: 0; letter-spacing: -0.01em;
+}
+.tp-anc-row { display: none; }
+.tp-opts { display: flex; gap: 10px; }
+.tp-opt {
+  width: 64px; height: 64px;
+  border: 1px solid #d4cfbd;
+  background: #fefdf9;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 17px; color: #7a7565; font-weight: 500;
+  transition: all 0.12s ease;
+  padding: 0;
+}
+.tp-opt:hover { border-color: #4f46e5; color: #4f46e5; }
+.tp-opt.sel {
+  background: #4f46e5; border-color: #4f46e5;
+  color: white;
+  box-shadow: 0 8px 20px -4px rgba(79,70,229,0.4);
+}
+.tp-foot {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 32px 0 0; margin-top: 8px;
+  border-top: 1px solid #e0dccd;
+}
+.tp-btn {
+  background: transparent;
+  border: 1px solid #d4cfbd;
+  padding: 12px 22px;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 14px; font-weight: 500;
+  color: #3a3530; cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.tp-btn:hover:not(:disabled) { border-color: #1a1d24; }
+.tp-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.tp-btn.next {
+  background: #1a1d24; border-color: #1a1d24; color: white;
+}
+.tp-btn.next:disabled { background: #d4cfbd; border-color: #d4cfbd; color: #fefdf9; opacity: 1; }
+.tp-foot-mid {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: #7a7565;
+}
+.tp-dev {
+  margin-bottom: 24px; padding: 12px 14px;
+  background: rgba(250,204,21,0.18);
+  border: 1px dashed rgba(180,140,0,0.5);
+  border-radius: 10px;
+}
+.tp-dev-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.tp-dev-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.15em;
+  color: #92400e; background: rgba(250,204,21,0.3);
+  padding: 3px 8px; border-radius: 6px;
+}
+.tp-dev-desc { font-size: 12px; color: #3a3530; }
+.tp-dev-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.tp-dev-btn {
+  padding: 10px 12px;
+  border: 1px solid rgba(180,140,0,0.45);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.7);
+  color: #3a3530;
+  font-size: 12px; font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+.tp-dev-btn:hover { background: rgba(255,255,255,0.9); }
+@media (max-width: 640px) {
+  .tp-top { padding: 14px 18px; gap: 12px; flex-wrap: wrap; }
+  .tp-l { order: 1; }
+  .tp-r { max-width: 100%; min-width: 100%; flex-basis: 100%; order: 2; }
+  .tp-body { padding: 28px 18px 40px; }
+  .tp-pg b { font-size: 32px; }
+  .tp-q { grid-template-columns: 40px 1fr; padding: 22px 0; gap: 6px 12px; }
+  .tp-qt { font-size: 15.5px; margin: 0 0 14px; }
+  .tp-scale {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-areas: "anc-row" "opts";
+    gap: 8px;
+  }
+  .tp-anc { display: none; }
+  .tp-anc-row {
+    grid-area: anc-row;
+    display: flex; justify-content: space-between;
+    font-size: 12px; color: #7a7565; font-weight: 500;
+  }
+  .tp-opts {
+    grid-area: opts;
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+  }
+  .tp-opt { width: 100%; height: 52px; font-size: 15px; border-radius: 10px; }
+  .tp-foot { padding: 20px 0 0; }
+  .tp-btn { padding: 10px 14px; font-size: 13px; }
+  .tp-foot-mid { font-size: 11px; }
+}
+`;
+
 export default function App(){
   const[stage,setStage]=useState("intro");
   const[companyName,setCompanyName]=useState("");
@@ -397,6 +598,7 @@ export default function App(){
   const[testSet,setTestSet]=useState(null); // {questions, ccPairs, ifIds, revPairs, seed}
   const[companyValidation,setCompanyValidation]=useState(null); // null | {state:"validating"} | {state:"confirm", correctedName, message} | {state:"error", message}
   const[skipCompanyAI,setSkipCompanyAI]=useState(false); // 사용자가 미검증 기업명으로 그대로 진행한 경우 AI 기업 분석 생략
+  const[now,setNow]=useState(Date.now());
 
   const questions = testSet?.questions || [];
   const TOTAL_Q=questions.length;
@@ -414,6 +616,12 @@ export default function App(){
   }
 
   useEffect(()=>{window.scrollTo({top:0,behavior:"smooth"});},[page,stage]);
+  useEffect(()=>{
+    if(stage!=="test")return;
+    setNow(Date.now());
+    const id=setInterval(()=>setNow(Date.now()),1000);
+    return()=>clearInterval(id);
+  },[stage]);
 
   const curQs=useMemo(()=>{
     if(stage!=="test")return[];
@@ -573,7 +781,7 @@ export default function App(){
             </div>
             <h1 className="cinput-hero-title">딥둥이 <em>모의 인성검사</em></h1>
             <div className="cinput-hero-meta">
-              사기업 인성검사<span className="sep">·</span>200문항<span className="sep">·</span>약 25분
+              사기업 인성검사<span className="sep">·</span>200문항<span className="sep">·</span>약 30분
             </div>
           </div>
 
@@ -735,49 +943,84 @@ export default function App(){
   }
 
   // ═══ TEST ═══
-  return(
-    <div style={S.wrap}><div style={S.box}>
-      <div style={{position:"sticky",top:0,zIndex:10,background:"rgba(12,18,34,0.97)",backdropFilter:"blur(10px)",padding:"12px 0 8px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-          <img src="/deepdungi.png" alt="" style={{width:30,height:30,borderRadius:"50%",objectFit:"cover"}}/>
-          <span style={{fontSize:13,fontWeight:700,color:"#cbd5e0"}}>딥둥이 사기업 인성검사</span>
-          {companyName&&<span style={{fontSize:12,color:"#94a3b8",marginLeft:"auto"}}>{companyName}</span>}
+  const elapsedSec = startTime ? Math.max(0, Math.floor((now - startTime) / 1000)) : 0;
+  const remainingSec = TIME_LIMIT_SEC - elapsedSec;
+  const timeOverdue = remainingSec < 0;
+  const tMin = String(Math.floor(Math.abs(remainingSec) / 60)).padStart(2, "0");
+  const tSec = String(Math.abs(remainingSec) % 60).padStart(2, "0");
+  const timerLabel = timeOverdue ? "시간 초과" : `남은 시간 ${tMin}:${tSec}`;
+  return (
+    <div className="tp-page">
+      <style>{TEST_PAPER_CSS}</style>
+      <div className="tp-shell">
+        <div className="tp-top">
+          <div className="tp-l">
+            <img src="/deepdungi.png" alt="" />
+            <div className="tp-l-text">
+              <div className="tp-title">딥둥이 사기업 인성검사</div>
+              <div className="tp-co">
+                {companyName && <><span>{companyName}</span><span className="tp-sep">·</span></>}
+                <span>200문항</span>
+                <span className="tp-sep">·</span>
+                <span className={`tp-timer ${timeOverdue ? "over" : ""}`}>{timerLabel}</span>
+              </div>
+            </div>
+          </div>
+          <div className="tp-r">
+            <div className="tp-track"><div className="tp-fill" style={{width: `${pct}%`}} /></div>
+            <div className="tp-num">{total}/{TOTAL_Q}</div>
+          </div>
         </div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-          <span style={{fontSize:13,fontWeight:600,color:"#94a3b8"}}>{total}/{TOTAL_Q}</span>
-          <span style={{fontSize:13,fontWeight:700,color:"#60a5fa"}}>{pct}%</span>
+        <div className="tp-body">
+          {DEV_MODE && (
+            <div className="tp-dev">
+              <div className="tp-dev-head">
+                <span className="tp-dev-tag">🛠 DEV MODE</span>
+                <span className="tp-dev-desc">200문항 스킵 · 바로 결과로 이동</span>
+              </div>
+              <div className="tp-dev-grid">
+                <button className="tp-dev-btn" onClick={()=>devAutoFill(()=>4)}>전부 4로 자동 채우기</button>
+                <button className="tp-dev-btn" onClick={()=>devAutoFill(()=>Math.floor(Math.random()*5)+1)}>랜덤 자동 채우기</button>
+                <button className="tp-dev-btn" onClick={()=>devAutoFill(()=>5)}>극단 테스트 (전부 5)</button>
+                <button className="tp-dev-btn" onClick={()=>devAutoFill(()=>3)}>무성의 테스트 (전부 3)</button>
+              </div>
+            </div>
+          )}
+          <div className="tp-pg">
+            <b>{String(page).padStart(2, "0")}</b>
+            <span>of {TOTAL_PAGES} pages</span>
+          </div>
+          {curQs.map((q, idx) => {
+            const gi = (page - 1) * PER_PAGE + idx + 1;
+            const sel = answers[q.id];
+            return (
+              <div key={q.id} className="tp-q">
+                <div className="tp-qn">Q{String(gi).padStart(2, "0")}</div>
+                <div>
+                  <p className={`tp-qt ${sel ? "on" : ""}`}>{q.text}</p>
+                  <div className="tp-scale">
+                    <div className="tp-anc-row"><span>전혀 아니다</span><span>매우 그렇다</span></div>
+                    <div className="tp-anc">전혀 아니다</div>
+                    <div className="tp-opts">
+                      {[1,2,3,4,5].map(v => (
+                        <button key={v} className={`tp-opt ${sel === v ? "sel" : ""}`} onClick={() => setAnswers(p => ({ ...p, [q.id]: v }))}>{v}</button>
+                      ))}
+                    </div>
+                    <div className="tp-anc">매우 그렇다</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <div className="tp-foot">
+            <button className="tp-btn" disabled={page <= 1} onClick={() => page > 1 && setPage(page - 1)}>← 이전</button>
+            <div className="tp-foot-mid">PAGE {String(page).padStart(2, "0")} / {String(TOTAL_PAGES).padStart(2, "0")}</div>
+            <button className="tp-btn next" disabled={!allAnswered} onClick={allAnswered ? () => { if (page === TOTAL_PAGES) handleTestComplete(); else setPage(page + 1); } : undefined}>
+              {page === TOTAL_PAGES ? "결과 분석 →" : "다음 →"}
+            </button>
+          </div>
         </div>
-        <div style={S.progBg}><div style={S.progFill(pct)}/></div>
       </div>
-      {DEV_MODE && <div style={{margin:"12px 0",padding:"12px 14px",background:"rgba(250,204,21,0.08)",border:"1px dashed rgba(250,204,21,0.45)",borderRadius:10}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-          <span style={{fontSize:11,fontWeight:900,letterSpacing:1.5,color:"#fde047",background:"rgba(250,204,21,0.15)",padding:"3px 8px",borderRadius:6}}>🛠 DEV MODE</span>
-          <span style={{fontSize:12,color:"#cbd5e0"}}>200문항 스킵 · 바로 결과로 이동</span>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(2, 1fr)",gap:6}}>
-          <button style={{padding:"10px 12px",border:"1px solid rgba(250,204,21,0.4)",borderRadius:8,background:"rgba(15,23,42,0.5)",color:"#fde047",fontSize:12,fontWeight:700,cursor:"pointer"}} onClick={()=>devAutoFill(()=>4)}>전부 4로 자동 채우기</button>
-          <button style={{padding:"10px 12px",border:"1px solid rgba(250,204,21,0.4)",borderRadius:8,background:"rgba(15,23,42,0.5)",color:"#fde047",fontSize:12,fontWeight:700,cursor:"pointer"}} onClick={()=>devAutoFill(()=>Math.floor(Math.random()*5)+1)}>랜덤 자동 채우기</button>
-          <button style={{padding:"10px 12px",border:"1px solid rgba(250,204,21,0.4)",borderRadius:8,background:"rgba(15,23,42,0.5)",color:"#fde047",fontSize:12,fontWeight:700,cursor:"pointer"}} onClick={()=>devAutoFill(()=>5)}>극단 테스트 (전부 5)</button>
-          <button style={{padding:"10px 12px",border:"1px solid rgba(250,204,21,0.4)",borderRadius:8,background:"rgba(15,23,42,0.5)",color:"#fde047",fontSize:12,fontWeight:700,cursor:"pointer"}} onClick={()=>devAutoFill(()=>3)}>무성의 테스트 (전부 3)</button>
-        </div>
-      </div>}
-      <div style={{textAlign:"center",fontSize:14,color:"#94a3b8",marginBottom:14,fontWeight:600}}>페이지 {page} / {TOTAL_PAGES}</div>
-      {curQs.map((q,idx)=>{
-        const gi=(page-1)*PER_PAGE+idx+1;
-        return(<div key={q.id} style={{...S.card,padding:20}}>
-          <div style={S.qNum}>Q{gi}</div>
-          <div style={S.qTxt}>{q.text}</div>
-          <div style={S.scRow}>{[1,2,3,4,5].map(v=><button key={v} style={S.scBtn(answers[q.id]===v)} onClick={()=>setAnswers(p=>({...p,[q.id]:v}))}>{v}</button>)}</div>
-          <div style={S.scLbl}><span>전혀 아니다</span><span>매우 그렇다</span></div>
-        </div>);
-      })}
-      <div style={S.nav}>
-        {page>1&&<button style={S.btn(false)} onClick={()=>setPage(page-1)}>← 이전</button>}
-        <button style={allAnswered?S.btn(true):S.btnOff} onClick={allAnswered?()=>{if(page===TOTAL_PAGES){handleTestComplete();}else setPage(page+1);}:undefined} disabled={!allAnswered}>
-          {page===TOTAL_PAGES?"결과 분석 →":"다음 →"}
-        </button>
-      </div>
-      <div style={{height:32}}/>
-    </div></div>
+    </div>
   );
 }
