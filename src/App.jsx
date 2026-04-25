@@ -241,6 +241,148 @@ const COMPANY_INPUT_CSS = `
 }
 `;
 
+const TIPS_CSS = `
+.tips-page {
+  --accent: #818cf8;
+  --accent-soft: rgba(129,140,248,0.12);
+  --accent-glow: rgba(129,140,248,0.3);
+  --bg: #0a0c10;
+  --border: rgba(255,255,255,0.07);
+  --border-strong: rgba(255,255,255,0.14);
+  --text: #e5e7eb;
+  --text-muted: #8b92a0;
+  --text-dim: #5c6370;
+  position: relative;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Noto Sans KR', sans-serif;
+  letter-spacing: -0.01em;
+  overflow-x: hidden;
+}
+.tips-page, .tips-page * { box-sizing: border-box; }
+.tips-haze {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, var(--accent-soft), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 50% 100%, rgba(129,140,248,0.06), transparent 60%);
+}
+.tips-content {
+  position: relative; z-index: 1; min-height: 100vh;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 48px 24px 64px;
+}
+.tips-topbar {
+  width: 100%; max-width: 580px;
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+}
+.tips-brand { color: var(--text-muted); display: inline-flex; align-items: center; }
+.tips-brand-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); margin-right: 8px;
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+.tips-version { color: var(--text-dim); }
+.tips-hero { margin-top: 40px; text-align: center; max-width: 580px; }
+.tips-hero-badge {
+  width: 88px; height: 88px; margin: 0 auto 18px;
+  border: 1px solid var(--border-strong); border-radius: 16px;
+  background: radial-gradient(circle at 50% 40%, var(--accent-soft), transparent 70%);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.tips-hero-badge img { width: 64px; height: 64px; object-fit: contain; border-radius: 50%; }
+.tips-hero-title {
+  font-size: 26px; font-weight: 700; letter-spacing: -0.025em;
+  margin: 0 0 8px; line-height: 1.2; color: var(--text);
+}
+.tips-hero-title em {
+  font-style: normal; color: var(--accent);
+  text-shadow: 0 0 24px var(--accent-glow);
+}
+.tips-hero-sub { font-size: 14px; color: var(--text); font-weight: 500; letter-spacing: -0.01em; }
+.tips-callout {
+  width: 100%; max-width: 580px; margin-top: 32px;
+  padding: 16px 20px;
+  background: var(--accent-soft);
+  border: 1px solid rgba(129,140,248,0.25);
+  border-left: 2px solid var(--accent);
+  border-radius: 8px;
+  font-size: 14.5px; color: var(--text); line-height: 1.65;
+}
+.tips-callout strong { color: var(--accent); font-weight: 600; }
+.tips-list {
+  width: 100%; max-width: 580px; margin-top: 16px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.tips-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.015) 100%);
+  border: 1px solid var(--border-strong); border-radius: 12px;
+  padding: 18px 20px;
+  display: grid; grid-template-columns: 36px 1fr; gap: 14px;
+  position: relative;
+}
+.tips-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; font-weight: 600; color: var(--accent);
+  letter-spacing: 0.15em;
+  background: var(--accent-soft);
+  border: 1px solid rgba(129,140,248,0.25);
+  border-radius: 4px; padding: 3px 0;
+  text-align: center; height: fit-content; width: 36px;
+}
+.tips-title {
+  font-size: 14.5px; font-weight: 600; color: var(--text);
+  margin: 0 0 6px; letter-spacing: -0.01em;
+}
+.tips-body {
+  font-size: 12.5px; color: var(--text-muted);
+  line-height: 1.65; margin: 0;
+}
+.tips-body strong { color: var(--text); font-weight: 600; }
+.tips-body code {
+  font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+  color: var(--text);
+  background: rgba(255,255,255,0.05);
+  padding: 1px 6px; border-radius: 3px;
+  border: 1px solid var(--border);
+}
+.tips-cta-wrap {
+  width: 100%; max-width: 580px; margin-top: 22px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+}
+.tips-cta {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 10px; width: 100%; padding: 16px 28px;
+  background: var(--accent-soft); border: 1px solid var(--accent);
+  color: var(--text); font-family: inherit;
+  font-size: 14px; font-weight: 600; letter-spacing: 0.02em;
+  border-radius: 10px; cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 0 24px rgba(129,140,248,0.15);
+}
+.tips-cta:hover {
+  background: var(--accent); color: var(--bg);
+  box-shadow: 0 0 32px rgba(129,140,248,0.4);
+}
+.tips-arrow { font-family: 'JetBrains Mono', monospace; font-weight: 400; transition: transform 0.15s ease; }
+.tips-cta:hover .tips-arrow { transform: translateX(3px); }
+.tips-back {
+  background: none; border: none; font-family: inherit;
+  font-size: 13.5px; color: rgba(229,231,235,0.75);
+  letter-spacing: -0.005em; cursor: pointer;
+  padding: 6px 10px; transition: color 0.15s ease;
+}
+.tips-back:hover { color: var(--text); }
+@media (max-width: 640px) {
+  .tips-content { padding: 24px 16px 40px; }
+  .tips-hero { margin-top: 24px; }
+  .tips-hero-title { font-size: 22px; }
+  .tips-card { padding: 14px 16px; grid-template-columns: 32px 1fr; gap: 12px; }
+}
+`;
+
 export default function App(){
   const[stage,setStage]=useState("intro");
   const[companyName,setCompanyName]=useState("");
@@ -498,38 +640,75 @@ export default function App(){
 
   // ═══ PRE-TIP (검사 전 팁) ═══
   if(stage==="pre_tip") {
-    const tips=[
-      {emoji:"🎯",title:"정답은 없어요",body:"인성검사는 좋은 성격/나쁜 성격을 가리는 게 아니에요. \"이 사람이 어떤 사람인가\"를 보는 거예요. 솔직하게 답할수록 좋은 결과가 나와요."},
-      {emoji:"🙅",title:"너무 완벽한 답변은 오히려 불리해요",body:"인성검사는 성인군자를 채용하는 게 아닙니다. 적당한 약점 인정이 오히려 신뢰도를 높여줍니다."},
-      {emoji:"🔁",title:"비슷한 질문이 여러 번 나와요",body:"일부러 그렇게 설계되어 있어요. 앞에서 한 답과 뒤에서 한 답이 모순되면 신뢰도 점수가 떨어져요. 문항을 끝까지 읽고 답하세요."},
-      {emoji:"↔️",title:"\"~하지 않는다\" 문항을 주의하세요",body:"\"일을 미루는 경향이 있다\"처럼 부정적 표현 문항이 섞여 있어요. 이런 문항은 점수가 반대로 계산돼요. 빠르게 풀되, 문장 끝까지 읽으세요."},
-      {emoji:"⏱️",title:"시간은 충분해요, 하지만 너무 오래 고민하지 마세요",body:"직감적으로 1~2초 안에 답하는 게 가장 정확해요. 고민이 길어지면 오히려 솔직한 답에서 멀어져요."},
-    ];
     return(
-      <div style={S.wrap}><div style={S.box}>
-        <div style={{height:24}}/>
-        <DeepHeader subtitle={"검사 전 꼭 읽어주세요"}/>
-        <div style={{...S.card,background:"rgba(99,102,241,0.06)",border:"1px solid rgba(139,92,246,0.3)",padding:"16px 18px",marginBottom:14}}>
-          <div style={{fontSize:14,lineHeight:1.7,color:"#cbd5e0"}}>
-            검사 시작 전에 <span style={{color:"#c4b5fd",fontWeight:700}}>5가지 핵심 팁</span>을 확인해 주세요. 이 팁만 알아도 실제 인성검사에서 통과 가능성이 크게 올라갑니다.
+      <div className="tips-page">
+        <style>{TIPS_CSS}</style>
+        <div className="tips-haze" />
+        <div className="tips-content">
+          <div className="tips-topbar">
+            <div className="tips-brand"><span className="tips-brand-dot" />457DEEP · 딥둥이</div>
+            <div className="tips-version">v 2.1.0</div>
+          </div>
+
+          <div className="tips-hero">
+            <div className="tips-hero-badge"><img src="/deepdungi.png" alt="딥둥이" /></div>
+            <h1 className="tips-hero-title">딥둥이 <em>모의 인성검사</em></h1>
+            <div className="tips-hero-sub">검사 전 꼭 읽어주세요</div>
+          </div>
+
+          <div className="tips-callout">
+            검사 시작 전에 <strong>5가지 핵심 팁</strong>을 확인해 주세요. 이 팁만 알아도 실제 인성검사에서 통과 가능성이 크게 올라갑니다.
+          </div>
+
+          <div className="tips-list">
+            <div className="tips-card">
+              <div className="tips-num">TIP 1</div>
+              <div>
+                <h3 className="tips-title">정답은 없어요</h3>
+                <p className="tips-body">인성검사는 좋은 성격/나쁜 성격을 가리는 게 아니에요. <strong>"이 사람이 어떤 사람인가"</strong>를 보는 거예요. 솔직하게 답할수록 좋은 결과가 나와요.</p>
+              </div>
+            </div>
+            <div className="tips-card">
+              <div className="tips-num">TIP 2</div>
+              <div>
+                <h3 className="tips-title">너무 완벽한 답변은 오히려 불리해요</h3>
+                <p className="tips-body">인성검사는 성인군자를 채용하는 게 아닙니다. <strong>적당한 약점 인정</strong>이 오히려 신뢰도를 높여줍니다.</p>
+              </div>
+            </div>
+            <div className="tips-card">
+              <div className="tips-num">TIP 3</div>
+              <div>
+                <h3 className="tips-title">비슷한 질문이 여러 번 나와요</h3>
+                <p className="tips-body">일부러 그렇게 설계되어 있어요. 앞에서 한 답과 뒤에서 한 답이 모순되면 신뢰도 점수가 떨어져요. <strong>문항을 끝까지 읽고</strong> 답하세요.</p>
+              </div>
+            </div>
+            <div className="tips-card">
+              <div className="tips-num">TIP 4</div>
+              <div>
+                <h3 className="tips-title">"~하지 않는다" 문항을 주의하세요</h3>
+                <p className="tips-body"><code>"일을 미루는 경향이 있다"</code>처럼 부정적 표현 문항이 섞여 있어요. 이런 문항은 점수가 반대로 계산돼요. 빠르게 풀되, 문장 끝까지 읽으세요.</p>
+              </div>
+            </div>
+            <div className="tips-card">
+              <div className="tips-num">TIP 5</div>
+              <div>
+                <h3 className="tips-title">시간은 충분해요, 하지만 너무 오래 고민하지 마세요</h3>
+                <p className="tips-body">직감적으로 <strong>1~2초 안에 답하는 게 가장 정확</strong>해요. 고민이 길어지면 오히려 솔직한 답에서 멀어져요.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="tips-cta-wrap">
+            <button className="tips-cta" onClick={()=>startNewSession()}>
+              확인했어요, 검사 시작
+              <span className="tips-arrow">→</span>
+            </button>
+            <button className="tips-back" onClick={()=>setStage("company_input")}>
+              ← 기업명 다시 입력
+            </button>
           </div>
         </div>
-        {tips.map((t,i)=>(
-          <div key={i} style={{...S.card,padding:"18px 20px"}}>
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-              <span style={{fontSize:24}}>{t.emoji}</span>
-              <span style={{fontSize:11,fontWeight:900,color:"#a78bfa",background:"rgba(139,92,246,0.15)",padding:"2px 8px",borderRadius:6,letterSpacing:1}}>TIP {i+1}</span>
-            </div>
-            <div style={{fontSize:16,fontWeight:800,color:"#f1f5f9",marginBottom:8,lineHeight:1.5}}>{t.title}</div>
-            <div style={{fontSize:14,lineHeight:1.8,color:"#cbd5e0"}}>{t.body}</div>
-          </div>
-        ))}
-        <button style={{...S.btn(true),display:"block",width:"100%",padding:"18px",fontSize:18,fontWeight:800,marginTop:8,boxShadow:"0 6px 24px rgba(99,102,241,0.3)"}} onClick={()=>startNewSession()}>
-          확인했어요, 검사 시작 →
-        </button>
-        <button style={{display:"block",width:"100%",marginTop:10,padding:"12px",background:"transparent",border:"none",color:"#94a3b8",fontSize:13,cursor:"pointer"}} onClick={()=>setStage("company_input")}>← 기업명 다시 입력</button>
-        <div style={{height:32}}/>
-      </div></div>
+      </div>
     );
   }
 
