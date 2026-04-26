@@ -205,6 +205,11 @@ export default function ResultView({ basicResults, aiResults, aiError, companyDa
             </div>
           </div>
         </div>
+        {pType.name === "균형잡힌 올라운더" && conP < 50 && (
+          <div className="fin-type-notice">
+            현재 '균형잡힌 올라운더'로 판정되었지만, 응답 안정성이 낮은 상태에서의 결과예요. 비슷한 의미의 문항에 다르게 답한 경우가 많아서, 차원 간 점수 차이가 줄어들어 이 유형으로 나왔을 가능성이 있어요. 역문항(부정적 표현 문항)에 주의하면서 다시 검사해보면 더 정확한 유형을 확인할 수 있어요.
+          </div>
+        )}
       </div>
 
       {/* §02 Personality Dimensions */}
@@ -745,6 +750,11 @@ const FIN_CSS = `
 .fin-type-tags > div { display: flex; gap: 8px; align-items: baseline; }
 .fin-type-tags .tag-label { color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; }
 .fin-type-tags .tag-items { color: var(--text); }
+.fin-type-notice {
+  margin-top: 22px; padding: 14px 18px;
+  background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25);
+  border-radius: 6px; font-size: 13px; color: var(--text); line-height: 1.7;
+}
 
 /* RADAR ROW */
 .fin-radar-row { display: grid; grid-template-columns: 300px 1fr; gap: 36px; align-items: start; }
