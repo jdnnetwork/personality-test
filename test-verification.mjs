@@ -119,6 +119,133 @@ const scenarios = [
       noInfrequency:     (r) => !r.validityChecks.infrequency.detected,
     },
   },
+  // ─── 유형 다양성 시나리오 (8~15) ───
+  // 원점수(sc)로 판정하는지 확인 — 강 차원: 정=5/역=1 → raw≈100, 보통: randInt(2,4) → raw≈50
+  {
+    name: "8. 전략적 혁신가 (O+L+C 강, 나머지 보통)",
+    answer: (q, rand) => {
+      if (q.dim === "SD") return randInt(rand, 1, 2);
+      if (q.dim === "IF") return randInt(rand, 1, 2);
+      const strong = q.dim === "O" || q.dim === "L" || q.dim === "C";
+      if (strong) return q.rev ? 1 : 5;
+      return randInt(rand, 2, 4);
+    },
+    expect: {
+      typeMatches:       (r) => r.personalityType.name === "전략적 혁신가",
+      rawOHigh:          (r) => r.scores.O >= 75,
+      rawLHigh:          (r) => r.scores.L >= 70,
+      rawCHigh:          (r) => r.scores.C >= 65,
+    },
+  },
+  {
+    name: "9. 안정적 실행가 (C+N+S 강, 나머지 보통)",
+    answer: (q, rand) => {
+      if (q.dim === "SD") return randInt(rand, 1, 2);
+      if (q.dim === "IF") return randInt(rand, 1, 2);
+      const strong = q.dim === "C" || q.dim === "N" || q.dim === "S";
+      if (strong) return q.rev ? 1 : 5;
+      return randInt(rand, 2, 4);
+    },
+    expect: {
+      typeMatches:       (r) => r.personalityType.name === "안정적 실행가",
+      rawCHigh:          (r) => r.scores.C >= 80,
+      rawNHigh:          (r) => r.scores.N >= 75,
+      rawSHigh:          (r) => r.scores.S >= 70,
+    },
+  },
+  {
+    name: "10. 소통형 리더 (E+A+L 강, 나머지 보통)",
+    answer: (q, rand) => {
+      if (q.dim === "SD") return randInt(rand, 1, 2);
+      if (q.dim === "IF") return randInt(rand, 1, 2);
+      const strong = q.dim === "E" || q.dim === "A" || q.dim === "L";
+      if (strong) return q.rev ? 1 : 5;
+      return randInt(rand, 2, 4);
+    },
+    expect: {
+      typeMatches:       (r) => r.personalityType.name === "소통형 리더",
+      rawEHigh:          (r) => r.scores.E >= 75,
+      rawAHigh:          (r) => r.scores.A >= 70,
+      rawLHigh:          (r) => r.scores.L >= 65,
+    },
+  },
+  {
+    name: "11. 분석적 전문가 (O+C+F 강, E 낮음, 나머지 보통)",
+    answer: (q, rand) => {
+      if (q.dim === "SD") return randInt(rand, 1, 2);
+      if (q.dim === "IF") return randInt(rand, 1, 2);
+      if (q.dim === "E") return q.rev ? 5 : 1;
+      const strong = q.dim === "O" || q.dim === "C" || q.dim === "F";
+      if (strong) return q.rev ? 1 : 5;
+      return randInt(rand, 2, 4);
+    },
+    expect: {
+      typeMatches:       (r) => r.personalityType.name === "분석적 전문가",
+      rawOHigh:          (r) => r.scores.O >= 70,
+      rawCHigh:          (r) => r.scores.C >= 75,
+      rawFHigh:          (r) => r.scores.F >= 70,
+      rawELow:           (r) => r.scores.E <= 25,
+    },
+  },
+  {
+    name: "12. 자율적 추진자 (I+L+S 강, 나머지 보통)",
+    answer: (q, rand) => {
+      if (q.dim === "SD") return randInt(rand, 1, 2);
+      if (q.dim === "IF") return randInt(rand, 1, 2);
+      const strong = q.dim === "I" || q.dim === "L" || q.dim === "S";
+      if (strong) return q.rev ? 1 : 5;
+      return randInt(rand, 2, 4);
+    },
+    expect: {
+      typeMatches:       (r) => r.personalityType.name === "자율적 추진자",
+      rawIHigh:          (r) => r.scores.I >= 75,
+      rawLHigh:          (r) => r.scores.L >= 70,
+      rawSHigh:          (r) => r.scores.S >= 65,
+    },
+  },
+  {
+    name: "13. 유연한 조율자 (A+N+S 강, 나머지 보통)",
+    answer: (q, rand) => {
+      if (q.dim === "SD") return randInt(rand, 1, 2);
+      if (q.dim === "IF") return randInt(rand, 1, 2);
+      const strong = q.dim === "A" || q.dim === "N" || q.dim === "S";
+      if (strong) return q.rev ? 1 : 5;
+      return randInt(rand, 2, 4);
+    },
+    expect: {
+      typeMatches:       (r) => r.personalityType.name === "유연한 조율자",
+      rawAHigh:          (r) => r.scores.A >= 75,
+      rawNHigh:          (r) => r.scores.N >= 70,
+      rawSHigh:          (r) => r.scores.S >= 65,
+    },
+  },
+  {
+    name: "14. 공감형 서포터 (A 매우 강, E 약간 강, 나머지 보통)",
+    answer: (q, rand) => {
+      if (q.dim === "SD") return randInt(rand, 1, 2);
+      if (q.dim === "IF") return randInt(rand, 1, 2);
+      if (q.dim === "A") return q.rev ? 1 : 5;
+      if (q.dim === "E") return q.rev ? 2 : 4;
+      return randInt(rand, 2, 4);
+    },
+    expect: {
+      typeMatches:       (r) => r.personalityType.name === "공감형 서포터",
+      rawAHigh:          (r) => r.scores.A >= 80,
+      rawEModerate:      (r) => r.scores.E >= 60 && r.scores.E <= 80,
+    },
+  },
+  {
+    name: "15. 균형잡힌 올라운더 (전부 보통)",
+    answer: (q, rand) => {
+      if (q.dim === "SD") return randInt(rand, 1, 2);
+      if (q.dim === "IF") return randInt(rand, 1, 2);
+      return randInt(rand, 2, 4);
+    },
+    expect: {
+      typeMatches:       (r) => r.personalityType.name === "균형잡힌 올라운더",
+      noDimAbove65:      (r) => DIMS_ORDER.every(d => r.scores[d] < 65),
+    },
+  },
 ];
 
 // ─── 실행 + 출력 ───
