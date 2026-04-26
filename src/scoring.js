@@ -2,9 +2,18 @@
 // App.jsx와 테스트 스크립트가 공통으로 사용
 import { DIMS_ORDER, PERSONALITY_TYPES, IF_THRESHOLD, IF_FLAG_MIN } from "./questions.js";
 
-// ─── 점수 보정 ───
+// ─── 점수 보정 (구간별 차등) ───
+// 표시용 보정: 유형 판정·등급 산출은 별도로 원점수(sc) 또는 adjRaw 기준
 export function adjustScore(raw) {
-  return Math.min(95, Math.max(25, Math.round(raw * 0.6 + 30)));
+  if (typeof raw !== "number") return raw;
+  const r = Math.max(0, Math.min(100, raw));
+  let display;
+  if (r <= 30) display = Math.max(20, r * 0.8 + 10);
+  else if (r <= 50) display = r * 0.9 + 5;
+  else if (r <= 70) display = r * 0.95;
+  else if (r <= 85) display = r * 0.9;
+  else display = Math.min(88, r * 0.8 + 8);
+  return Math.round(display);
 }
 export function adjustCompanyScore(raw) {
   if (typeof raw !== "number") return raw;
@@ -14,7 +23,7 @@ export function adjustCompanyScore(raw) {
 // ─── 신뢰도 공용 빌더 ───
 export function buildScore(raw, penalty) {
   const adjRaw = Math.max(0, Math.round(raw - penalty));
-  const display = Math.max(35, adjRaw); // 하한 35
+  const display = adjustScore(adjRaw); // 표시점수도 동일 구간별 차등 보정
   const level = adjRaw >= 80 ? "매우 높음"
     : adjRaw >= 65 ? "양호"
     : adjRaw >= 50 ? "보통"
