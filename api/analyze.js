@@ -205,7 +205,7 @@ ${validityWarnings.length > 0 ? "\n📌 응답 패턴 참고 사항 (결과 텍�
     // 타입별 max_tokens
     // analyze_company: 프로파일 요약
     // generate_results: 20개 면접 질문 포함 리포트 (가장 긴 응답)
-    const maxTokens = type === "analyze_company" ? 1024 : 4096;
+    const maxTokens = type === "analyze_company" ? 2048 : 16000;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
