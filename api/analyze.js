@@ -215,7 +215,7 @@ ${validityWarnings.length > 0 ? "\n📌 응답 패턴 참고 사항 (결과 텍�
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-5",
         max_tokens: maxTokens,
         system: systemPrompt,
         messages: [{ role: "user", content: userPrompt }],
